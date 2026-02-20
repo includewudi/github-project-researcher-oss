@@ -1,5 +1,7 @@
 # github-project-researcher
 
+**English** | [中文](README_ZH.md)
+
 Prompt-only [OpenCode](https://github.com/anthropics/opencode) skill for researching GitHub projects.
 
 ## What it does
