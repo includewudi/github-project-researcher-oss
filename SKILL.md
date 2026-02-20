@@ -26,6 +26,13 @@ Self-evolving GitHub project research agent. Analyze projects, find vulnerabilit
 
 **日志位置：** `$LOG_BASE/{owner}_{repo}_{timestamp}/SESSION.md`
 
+**其他 Runner：** 如无 OpenCode Server，可使用 Claude 或 Gemini CLI：
+
+```bash
+./research.sh <github_url> --runner claude
+./research.sh <github_url> --runner gemini
+```
+
 ## When to Use
 
 - Research a GitHub project's capabilities and use cases
@@ -61,14 +68,15 @@ User: "What are alternatives to freqtrade for algo trading?" # Step 7
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--async` | - | 异步模式（推荐） |
-| `--log` | - | 保存会话日志 |
-| `--verbose` | - | 显示实时进度 |
+| `--runner RUNNER` | opencode | 执行后端：opencode / claude / gemini |
+| `--async` | - | 异步模式（仅 opencode） |
+| `--log` | - | 保存会话日志（仅 opencode） |
+| `--verbose` | - | 显示实时进度（仅 opencode） |
 | `--log-dir DIR` | `~/.github-researcher/logs` | 自定义日志目录 |
-| `--agent AGENT` | sisyphus | 指定 agent |
+| `--agent AGENT` | sisyphus | 指定 agent（仅 opencode） |
 | `--model MODEL` | default | 指定模型 |
 | `--timeout SECS` | 3600 | 超时时间 |
-| `--dry-run` | - | 健康检查 |
+| `--dry-run` | - | 预检查 |
 
 ## Research Workflow
 

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 #
-# research.sh — One-click GitHub project research via OpenCode Server
+# research.sh — One-click GitHub project research
+#
+# Supports three execution backends (runners):
+#   opencode  — OpenCode Server API (default, supports --async)
+#   claude    — Claude Code CLI (print mode, headless)
+#   gemini    — Gemini CLI (headless JSON output)
 #
 # Usage:
 #   ./research.sh <github_url> [options]
@@ -8,26 +13,30 @@
 # Examples:
 #   ./research.sh https://github.com/vercel/next.js
 #   ./research.sh https://github.com/vercel/next.js --async
+#   ./research.sh https://github.com/vercel/next.js --runner claude
+#   ./research.sh https://github.com/vercel/next.js --runner gemini --model gemini-2.5-flash
 #   ./research.sh https://github.com/vercel/next.js --port 4096
 #   ./research.sh https://github.com/vercel/next.js --agent build --model "github-copilot/claude-sonnet-4"
 #   ./research.sh https://github.com/vercel/next.js --async --log
 #
 # Options:
-#   --port PORT       OpenCode server port (default: 13456)
-#   --async           Async mode: submit and poll, don't block terminal
-#   --log             Save session log to log directory
+#   --runner RUNNER   Execution backend: opencode|claude|gemini (default: opencode)
+#   --port PORT       OpenCode server port (default: 13456, opencode runner only)
+#   --async           Async mode: submit and poll (opencode runner only)
+#   --log             Save session log to log directory (opencode runner only)
 #   --log-dir DIR     Custom log directory (default: ~/.github-researcher/logs)
 #   --verbose         Show real-time message updates in async mode
-#   --agent AGENT     Agent to use (default: sisyphus)
-#   --model MODEL     Model override, format: provider/model (e.g. github-copilot/claude-opus-4.6)
-#   --timeout SECS    Timeout in seconds for sync mode (default: 3600 = 1 hour)
-#   --dry-run         Parse URL and health check only, don't start research
+#   --agent AGENT     Agent to use (default: sisyphus, opencode runner only)
+#   --model MODEL     Model override (format depends on runner)
+#   --timeout SECS    Timeout in seconds (default: 3600 = 1 hour)
+#   --dry-run         Preflight check only, don't start research
 #   --help            Show this help message
 
 set -euo pipefail
 
 # ─── Defaults ───────────────────────────────────────────────────────────────────
 
+RUNNER="opencode"
 PORT=13456
 HOST="127.0.0.1"
 AGENT="sisyphus"
@@ -38,6 +47,7 @@ DRY_RUN=false
 VERBOSE=false
 SAVE_LOG=false
 LOG_DIR="${GITHUB_RESEARCHER_LOG_DIR:-$HOME/.github-researcher/logs}"
+CLONE_DIR="${GITHUB_RESEARCHER_CLONE_DIR:-$HOME/.github-researcher/projects}"
 GITHUB_URL=""
 SESSION_ID=""
 OWNER=""
@@ -89,21 +99,27 @@ Usage: research.sh <github_url> [options]
 
 Examples:
   ./research.sh https://github.com/vercel/next.js
-  ./research.sh https://github.com/vercel/next.js --async
   ./research.sh https://github.com/vercel/next.js --async --log --verbose
-  ./research.sh https://github.com/vercel/next.js --port 4096
+  ./research.sh https://github.com/vercel/next.js --runner claude
+  ./research.sh https://github.com/vercel/next.js --runner gemini --model gemini-2.5-flash
   ./research.sh https://github.com/vercel/next.js --agent build --model "github-copilot/claude-sonnet-4"
 
+Runners:
+  opencode          OpenCode Server API (default). Supports --async, --log, --verbose.
+  claude            Claude Code CLI (print mode). Requires: claude CLI + ANTHROPIC_API_KEY.
+  gemini            Gemini CLI (headless). Requires: gemini CLI + GEMINI_API_KEY.
+
 Options:
-  --port PORT       OpenCode server port (default: 13456)
-  --async           Async mode: submit and poll, don't block terminal
-  --log             Save session log to log directory
+  --runner RUNNER   Execution backend: opencode|claude|gemini (default: opencode)
+  --port PORT       OpenCode server port (default: 13456, opencode only)
+  --async           Async mode: submit and poll (opencode only)
+  --log             Save session log (opencode only)
   --log-dir DIR     Custom log directory (default: ~/.github-researcher/logs)
-  --verbose         Show real-time message updates in async mode
-  --agent AGENT     Agent to use (default: sisyphus)
-  --model MODEL     Model override, format: provider/model
-  --timeout SECS    Timeout in seconds for sync mode (default: 3600)
-  --dry-run         Parse URL and health check only
+  --verbose         Show real-time messages (opencode only)
+  --agent AGENT     Agent to use (default: sisyphus, opencode only)
+  --model MODEL     Model override (format depends on runner)
+  --timeout SECS    Timeout in seconds (default: 3600)
+  --dry-run         Preflight check only, don't start research
   --help            Show this help message
 USAGE
     exit 0
@@ -113,6 +129,7 @@ USAGE
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --runner)   RUNNER="$2"; shift 2 ;;
         --port)     PORT="$2"; shift 2 ;;
         --async)    ASYNC=true; shift ;;
         --log)      SAVE_LOG=true; shift ;;
@@ -142,6 +159,14 @@ if [[ -z "$GITHUB_URL" ]]; then
     usage
 fi
 
+case "$RUNNER" in
+    opencode|claude|gemini) ;;
+    *)
+        log_error "Invalid runner: $RUNNER (must be opencode, claude, or gemini)"
+        exit 1
+        ;;
+esac
+
 # ─── Parse GitHub URL ───────────────────────────────────────────────────────────
 
 parse_github_url() {
@@ -163,6 +188,25 @@ parse_github_url() {
 parse_github_url "$GITHUB_URL"
 FULL_NAME="${OWNER}/${REPO}"
 BASE_URL="http://${HOST}:${PORT}"
+
+# ─── Build Research Prompt ───────────────────────────────────────────────────
+
+build_prompt() {
+    cat << PROMPT
+加载 github-project-researcher 技能，研究 ${GITHUB_URL} 。
+
+要求：
+1. 走完 Step 1 到 Step 7 的全部流程
+2. 自动执行每个步骤，不需要等待我确认
+3. 根据 Step 3.0 的项目类型门控自动判断走代码分析还是文档分析路径
+4. 如果项目有推荐/建议且超过2年，执行 Step 4.2 生态审计
+5. 按照 Step 6.1 的KB卫生规则更新知识库
+6. 完成后输出 RESEARCH.md 的完整路径
+PROMPT
+}
+
+RESEARCH_PROMPT="$(build_prompt)"
+export RESEARCH_PROMPT AGENT MODEL
 
 # ─── Setup Log Directory ────────────────────────────────────────────────────────
 
@@ -196,12 +240,12 @@ save_session_messages() {
     local messages
     messages=$(curl -sf "${BASE_URL}/session/${SESSION_ID}/message" 2>/dev/null) || return
     
-    echo "" >> "$LOG_FILE"
-    echo "$messages" | python3 << 'PYEOF' >> "$LOG_FILE"
-import sys, json
-from datetime import datetime
+    {
+        echo ""
+        MESSAGES_JSON="$messages" python3 -c "
+import os, json
 
-data = json.load(sys.stdin)
+data = json.loads(os.environ['MESSAGES_JSON'])
 msgs = data if isinstance(data, list) else data.get('messages', data.get('items', []))
 
 for msg in msgs:
@@ -210,16 +254,15 @@ for msg in msgs:
     role = info.get('role', 'unknown')
     ts = info.get('timestamp', '')
     
-    print(f"\n### [{role.upper()}] {ts}\n")
+    print(f'\n### [{role.upper()}] {ts}\n')
     
     for part in parts:
         if part.get('type') == 'text':
             text = part.get('text', '')
             print(text)
             print()
-PYEOF
-
-    cat >> "$LOG_FILE" << EOF
+"
+        cat << EOF
 
 ---
 
@@ -227,6 +270,7 @@ PYEOF
 
 **Completed:** $(date '+%Y-%m-%d %H:%M:%S')
 EOF
+    } >> "$LOG_FILE"
     
     log_ok "Session log saved: ${LOG_FILE}"
 }
@@ -247,12 +291,12 @@ print(len(msgs))
 " 2>/dev/null)
     
     if [[ "$current_count" -gt "$LAST_MSG_COUNT" ]]; then
-        echo "$messages" | python3 << PYEOF
-import sys, json
+        MESSAGES_JSON="$messages" SKIP="$LAST_MSG_COUNT" python3 -c "
+import os, json
 
-data = json.load(sys.stdin)
+data = json.loads(os.environ['MESSAGES_JSON'])
 msgs = data if isinstance(data, list) else data.get('messages', data.get('items', []))
-skip = $LAST_MSG_COUNT
+skip = int(os.environ['SKIP'])
 
 for msg in msgs[skip:]:
     info = msg.get('info', {})
@@ -266,7 +310,7 @@ for msg in msgs[skip:]:
                 preview = text[:300] + ('...' if len(text) > 300 else '')
                 print(preview)
                 print('---')
-PYEOF
+"
         LAST_MSG_COUNT=$current_count
     fi
 }
@@ -278,79 +322,21 @@ echo -e "${BOLD}GitHub Project Researcher${NC}"
 echo -e "────────────────────────────────────────"
 echo -e "  Project:  ${CYAN}${FULL_NAME}${NC}"
 echo -e "  URL:      ${GITHUB_URL}"
-echo -e "  Server:   ${BASE_URL}"
+echo -e "  Runner:   ${RUNNER}"
+[[ "$RUNNER" == "opencode" ]] && echo -e "  Server:   ${BASE_URL}"
 echo -e "  Agent:    ${AGENT}"
 [[ -n "$MODEL" ]] && echo -e "  Model:    ${MODEL}"
-echo -e "  Mode:     $(${ASYNC} && echo 'async' || echo 'sync')"
-${VERBOSE} && echo -e "  Verbose:  enabled"
-${SAVE_LOG} && echo -e "  Log:      enabled"
+if [[ "$RUNNER" == "opencode" ]]; then
+    echo -e "  Mode:     $(${ASYNC} && echo 'async' || echo 'sync')"
+    ${VERBOSE} && echo -e "  Verbose:  enabled"
+    ${SAVE_LOG} && echo -e "  Log:      enabled"
+fi
 echo -e "────────────────────────────────────────"
 echo ""
 
-# ─── Step 1: Health Check ───────────────────────────────────────────────────────
+# ─── Runner: OpenCode Server ─────────────────────────────────────────────────
 
-log_step "1/4  Health check..."
-
-HEALTH=$(curl -sf "${BASE_URL}/global/health" 2>/dev/null) || {
-    log_error "OpenCode server not reachable at ${BASE_URL}"
-    log_error "Start it with: opencode serve --port ${PORT}"
-    exit 1
-}
-
-HEALTHY=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin).get('healthy', False))" 2>/dev/null)
-VERSION=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin).get('version', '?'))" 2>/dev/null)
-
-if [[ "$HEALTHY" != "True" ]]; then
-    log_error "Server reports unhealthy: ${HEALTH}"
-    exit 1
-fi
-
-log_ok "Server healthy (v${VERSION})"
-
-if $DRY_RUN; then
-    echo ""
-    log_info "Dry run complete. Would research: ${FULL_NAME}"
-    exit 0
-fi
-
-# ─── Step 2: Create Session ─────────────────────────────────────────────────────
-
-log_step "2/4  Creating session..."
-
-SESSION_RESPONSE=$(curl -sf -X POST "${BASE_URL}/session" \
-    -H "Content-Type: application/json" \
-    -d "{\"title\": \"Research: ${FULL_NAME}\"}" 2>/dev/null) || {
-    log_error "Failed to create session"
-    exit 1
-}
-
-SESSION_ID=$(echo "$SESSION_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null) || {
-    log_error "Failed to parse session ID from response: ${SESSION_RESPONSE}"
-    exit 1
-}
-
-log_ok "Session created: ${SESSION_ID}"
-
-# Setup log directory after session ID is known
-if $SAVE_LOG; then
-    setup_log_dir
-fi
-
-# ─── Step 3: Build Prompt ───────────────────────────────────────────────────────
-
-export RESEARCH_PROMPT="加载 github-project-researcher 技能，研究 ${GITHUB_URL} 。
-
-要求：
-1. 走完 Step 1 到 Step 7 的全部流程
-2. 自动执行每个步骤，不需要等待我确认
-3. 根据 Step 3.0 的项目类型门控自动判断走代码分析还是文档分析路径
-4. 如果项目有推荐/建议且超过2年，执行 Step 4.2 生态审计
-5. 按照 Step 6.1 的KB卫生规则更新知识库
-6. 完成后输出 RESEARCH.md 的完整路径"
-
-export AGENT MODEL
-
-build_payload() {
+build_opencode_payload() {
     python3 << 'PYEOF'
 import json, os
 
@@ -374,66 +360,99 @@ print(json.dumps(payload, ensure_ascii=False))
 PYEOF
 }
 
-# ─── Step 4: Send Research Request ──────────────────────────────────────────────
+run_with_opencode() {
+    log_step "1/4  Health check..."
 
-cleanup() {
-    local exit_code=$?
-    if [[ $exit_code -ne 0 ]] && [[ -n "${SESSION_ID:-}" ]]; then
-        log_warn "Aborting session ${SESSION_ID}..."
-        curl -sf -X POST "${BASE_URL}/session/${SESSION_ID}/abort" >/dev/null 2>&1 || true
-    fi
-}
-trap cleanup EXIT
-
-if $ASYNC; then
-    # ── Async Mode: Submit + Poll with Real-time Updates ─────────────────────
-
-    log_step "3/4  Sending research request (async)..."
-
-    PAYLOAD=$(build_payload)
-
-    HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" -X POST \
-        "${BASE_URL}/session/${SESSION_ID}/prompt_async" \
-        -H "Content-Type: application/json" \
-        -d "$PAYLOAD" 2>/dev/null) || {
-        log_error "Failed to submit async request"
+    HEALTH=$(curl -sf "${BASE_URL}/global/health" 2>/dev/null) || {
+        log_error "OpenCode server not reachable at ${BASE_URL}"
+        log_error "Start it with: opencode serve --port ${PORT}"
         exit 1
     }
 
-    if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
-        log_error "Async submit failed with HTTP ${HTTP_CODE}"
+    HEALTHY=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin).get('healthy', False))" 2>/dev/null)
+    VERSION=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin).get('version', '?'))" 2>/dev/null)
+
+    if [[ "$HEALTHY" != "True" ]]; then
+        log_error "Server reports unhealthy: ${HEALTH}"
         exit 1
     fi
 
-    log_ok "Request submitted"
-    log_step "4/4  Polling for completion..."
-    
-    if $VERBOSE; then
+    log_ok "Server healthy (v${VERSION})"
+
+    if $DRY_RUN; then
         echo ""
-        echo -e "${DIM}--- Real-time messages ---${NC}"
+        log_info "Dry run complete. Would research: ${FULL_NAME}"
+        return 0
     fi
 
-    POLL_INTERVAL=10
-    ELAPSED=0
-    LAST_MSG_COUNT=0
+    log_step "2/4  Creating session..."
 
-    while true; do
-        if [[ $ELAPSED -ge $TIMEOUT ]]; then
-            echo ""
-            log_error "Timeout after ${TIMEOUT}s. Session ${SESSION_ID} may still be running."
-            log_info "Check status:  curl ${BASE_URL}/session/status"
-            log_info "Abort:         curl -X POST ${BASE_URL}/session/${SESSION_ID}/abort"
+    SESSION_RESPONSE=$(curl -sf -X POST "${BASE_URL}/session" \
+        -H "Content-Type: application/json" \
+        -d "{\"title\": \"Research: ${FULL_NAME}\"}" 2>/dev/null) || {
+        log_error "Failed to create session"
+        exit 1
+    }
+
+    SESSION_ID=$(echo "$SESSION_RESPONSE" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])" 2>/dev/null) || {
+        log_error "Failed to parse session ID from response: ${SESSION_RESPONSE}"
+        exit 1
+    }
+
+    log_ok "Session created: ${SESSION_ID}"
+
+    if $SAVE_LOG; then
+        setup_log_dir
+    fi
+
+    local PAYLOAD
+    PAYLOAD=$(build_opencode_payload)
+
+    if $ASYNC; then
+        log_step "3/4  Sending research request (async)..."
+
+        HTTP_CODE=$(curl -sf -o /dev/null -w "%{http_code}" -X POST \
+            "${BASE_URL}/session/${SESSION_ID}/prompt_async" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" 2>/dev/null) || {
+            log_error "Failed to submit async request"
+            exit 1
+        }
+
+        if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
+            log_error "Async submit failed with HTTP ${HTTP_CODE}"
             exit 1
         fi
 
-        STATUS_JSON=$(curl -sf "${BASE_URL}/session/status" 2>/dev/null) || {
-            log_warn "Status check failed, retrying..."
-            sleep "$POLL_INTERVAL"
-            ELAPSED=$((ELAPSED + POLL_INTERVAL))
-            continue
-        }
+        log_ok "Request submitted"
+        log_step "4/4  Polling for completion..."
 
-        SESSION_STATUS=$(echo "$STATUS_JSON" | python3 -c "
+        if $VERBOSE; then
+            echo ""
+            echo -e "${DIM}--- Real-time messages ---${NC}"
+        fi
+
+        local POLL_INTERVAL=10
+        local ELAPSED=0
+        LAST_MSG_COUNT=0
+
+        while true; do
+            if [[ $ELAPSED -ge $TIMEOUT ]]; then
+                echo ""
+                log_error "Timeout after ${TIMEOUT}s. Session ${SESSION_ID} may still be running."
+                log_info "Check status:  curl ${BASE_URL}/session/status"
+                log_info "Abort:         curl -X POST ${BASE_URL}/session/${SESSION_ID}/abort"
+                exit 1
+            fi
+
+            STATUS_JSON=$(curl -sf "${BASE_URL}/session/status" 2>/dev/null) || {
+                log_warn "Status check failed, retrying..."
+                sleep "$POLL_INTERVAL"
+                ELAPSED=$((ELAPSED + POLL_INTERVAL))
+                continue
+            }
+
+            SESSION_STATUS=$(echo "$STATUS_JSON" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 info = data.get('${SESSION_ID}', {})
@@ -443,42 +462,42 @@ else:
     print('unknown')
 " 2>/dev/null)
 
-        case "$SESSION_STATUS" in
-            idle)
-                echo ""
-                log_ok "Research complete!"
-                break
-                ;;
-            retry)
-                log_warn "[${ELAPSED}s] Rate limited, retrying automatically..."
-                ;;
-            *)
-                if $VERBOSE; then
-                    fetch_latest_messages
-                else
-                    printf "\r  ${YELLOW}Running...${NC} %02d:%02d elapsed  " "$((ELAPSED / 60))" "$((ELAPSED % 60))"
-                fi
-                ;;
-        esac
+            case "$SESSION_STATUS" in
+                idle)
+                    echo ""
+                    log_ok "Research complete!"
+                    break
+                    ;;
+                retry)
+                    log_warn "[${ELAPSED}s] Rate limited, retrying automatically..."
+                    ;;
+                *)
+                    if $VERBOSE; then
+                        fetch_latest_messages
+                    else
+                        printf "\r  ${YELLOW}Running...${NC} %02d:%02d elapsed  " "$((ELAPSED / 60))" "$((ELAPSED % 60))"
+                    fi
+                    ;;
+            esac
 
-        sleep "$POLL_INTERVAL"
-        ELAPSED=$((ELAPSED + POLL_INTERVAL))
-    done
-    echo ""
+            sleep "$POLL_INTERVAL"
+            ELAPSED=$((ELAPSED + POLL_INTERVAL))
+        done
+        echo ""
 
-    log_info "Fetching results..."
+        log_info "Fetching results..."
 
-    MESSAGES=$(curl -sf "${BASE_URL}/session/${SESSION_ID}/message" 2>/dev/null) || {
-        log_warn "Could not fetch messages. Check session manually:"
-        log_info "  Session ID: ${SESSION_ID}"
-        exit 0
-    }
+        MESSAGES=$(curl -sf "${BASE_URL}/session/${SESSION_ID}/message" 2>/dev/null) || {
+            log_warn "Could not fetch messages. Check session manually:"
+            log_info "  Session ID: ${SESSION_ID}"
+            return 0
+        }
 
-    if $SAVE_LOG; then
-        save_session_messages
-    fi
+        if $SAVE_LOG; then
+            save_session_messages
+        fi
 
-    RESULT=$(echo "$MESSAGES" | python3 -c "
+        RESULT=$(echo "$MESSAGES" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 msgs = data if isinstance(data, list) else data.get('messages', data.get('items', []))
@@ -494,45 +513,42 @@ for msg in reversed(msgs):
 print('[No assistant response found]')
 " 2>/dev/null)
 
-else
-    # ── Sync Mode: Block Until Complete ──────────────────────────────────────
+    else
+        log_step "3/4  Sending research request (sync, timeout: ${TIMEOUT}s)..."
+        log_info "This may take 5-30 minutes. Press Ctrl+C to abort."
+        echo ""
 
-    log_step "3/4  Sending research request (sync, timeout: ${TIMEOUT}s)..."
-    log_info "This may take 5-30 minutes. Press Ctrl+C to abort."
-    echo ""
+        RESPONSE_FILE=$(mktemp)
 
-    PAYLOAD=$(build_payload)
+        HTTP_CODE=$(curl -sf -o "$RESPONSE_FILE" -w "%{http_code}" \
+            --max-time "$TIMEOUT" \
+            -X POST "${BASE_URL}/session/${SESSION_ID}/message" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" 2>/dev/null) || {
+            CURL_EXIT=$?
+            if [[ $CURL_EXIT -eq 28 ]]; then
+                log_error "Timeout after ${TIMEOUT}s"
+                log_info "Session ${SESSION_ID} may still be running."
+                log_info "Check status:  curl ${BASE_URL}/session/status"
+            else
+                log_error "Request failed (curl exit code: ${CURL_EXIT})"
+            fi
+            rm -f "$RESPONSE_FILE"
+            exit 1
+        }
 
-    RESPONSE_FILE=$(mktemp)
-    trap "rm -f '$RESPONSE_FILE'; cleanup" EXIT
-
-    HTTP_CODE=$(curl -sf -o "$RESPONSE_FILE" -w "%{http_code}" \
-        --max-time "$TIMEOUT" \
-        -X POST "${BASE_URL}/session/${SESSION_ID}/message" \
-        -H "Content-Type: application/json" \
-        -d "$PAYLOAD" 2>/dev/null) || {
-        CURL_EXIT=$?
-        if [[ $CURL_EXIT -eq 28 ]]; then
-            log_error "Timeout after ${TIMEOUT}s"
-            log_info "Session ${SESSION_ID} may still be running."
-            log_info "Check status:  curl ${BASE_URL}/session/status"
-        else
-            log_error "Request failed (curl exit code: ${CURL_EXIT})"
+        if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
+            log_error "Server returned HTTP ${HTTP_CODE}"
+            cat "$RESPONSE_FILE" >&2
+            rm -f "$RESPONSE_FILE"
+            exit 1
         fi
-        exit 1
-    }
 
-    if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
-        log_error "Server returned HTTP ${HTTP_CODE}"
-        cat "$RESPONSE_FILE" >&2
-        exit 1
-    fi
+        log_ok "Research complete!"
 
-    log_ok "Research complete!"
+        log_step "4/4  Extracting results..."
 
-    log_step "4/4  Extracting results..."
-
-    RESULT=$(python3 -c "
+        RESULT=$(python3 -c "
 import sys, json
 
 with open('${RESPONSE_FILE}', 'r') as f:
@@ -555,11 +571,153 @@ for part in parts:
 print('[No text content in response]')
 " 2>/dev/null)
 
-    if $SAVE_LOG; then
-        save_session_messages
+        if $SAVE_LOG; then
+            save_session_messages
+        fi
+
+        rm -f "$RESPONSE_FILE"
+    fi
+}
+
+# ─── Runner: Claude CLI ─────────────────────────────────────────────────────
+
+run_with_claude() {
+    log_step "1/2  Preflight check (Claude CLI)..."
+
+    if ! command -v claude &>/dev/null; then
+        log_error "claude CLI not found"
+        log_error "Install: curl -fsSL https://claude.ai/install.sh | bash"
+        log_error "Docs:    https://docs.anthropic.com/en/docs/claude-code/cli-reference"
+        exit 1
     fi
 
-    rm -f "$RESPONSE_FILE"
+    if [[ -z "${ANTHROPIC_API_KEY:-}" ]]; then
+        log_warn "ANTHROPIC_API_KEY not set — claude may require interactive login"
+        log_info "Set it with: export ANTHROPIC_API_KEY='sk-ant-...'"
+    fi
+
+    log_ok "Claude CLI found: $(claude --version 2>/dev/null || echo 'unknown version')"
+
+    if $DRY_RUN; then
+        echo ""
+        log_info "Dry run complete. Would research: ${FULL_NAME}"
+        return 0
+    fi
+
+    log_step "2/2  Running research (Claude CLI, timeout: ${TIMEOUT}s)..."
+    log_info "This may take 5-30 minutes. Press Ctrl+C to abort."
+    echo ""
+
+    local claude_args=("-p" "--output-format" "json")
+    claude_args+=("--allowedTools" "")
+    [[ -n "$MODEL" ]] && claude_args+=("--model" "$MODEL")
+
+    local RAW_OUTPUT
+    RAW_OUTPUT=$(timeout "$TIMEOUT" claude "${claude_args[@]}" "$RESEARCH_PROMPT" 2>/dev/null) || {
+        local exit_code=$?
+        if [[ $exit_code -eq 124 ]]; then
+            log_error "Timeout after ${TIMEOUT}s"
+        else
+            log_error "Claude CLI failed (exit code: ${exit_code})"
+        fi
+        exit 1
+    }
+
+    log_ok "Research complete!"
+
+    RESULT=$(echo "$RAW_OUTPUT" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    print(data.get('result', data.get('text', '[No result field in response]')))
+except (json.JSONDecodeError, KeyError):
+    print(sys.stdin.read())
+" 2>/dev/null) || RESULT="$RAW_OUTPUT"
+}
+
+# ─── Runner: Gemini CLI ─────────────────────────────────────────────────────
+
+run_with_gemini() {
+    log_step "1/2  Preflight check (Gemini CLI)..."
+
+    if ! command -v gemini &>/dev/null; then
+        log_error "gemini CLI not found"
+        log_error "Install: npm install -g @google/gemini-cli"
+        log_error "  or:    brew install gemini-cli"
+        log_error "Docs:    https://github.com/google-gemini/gemini-cli"
+        exit 1
+    fi
+
+    if [[ -z "${GEMINI_API_KEY:-}" ]] && [[ -z "${GOOGLE_APPLICATION_CREDENTIALS:-}" ]]; then
+        log_warn "GEMINI_API_KEY not set — gemini may require interactive login"
+        log_info "Set it with: export GEMINI_API_KEY='...'"
+    fi
+
+    log_ok "Gemini CLI found"
+
+    if $DRY_RUN; then
+        echo ""
+        log_info "Dry run complete. Would research: ${FULL_NAME}"
+        return 0
+    fi
+
+    log_step "2/2  Running research (Gemini CLI, timeout: ${TIMEOUT}s)..."
+    log_info "This may take 5-30 minutes. Press Ctrl+C to abort."
+    echo ""
+
+    local gemini_args=("--output-format" "json")
+    [[ -n "$MODEL" ]] && gemini_args+=("--model" "$MODEL")
+
+    local RAW_OUTPUT
+    RAW_OUTPUT=$(timeout "$TIMEOUT" gemini "${gemini_args[@]}" "$RESEARCH_PROMPT" 2>/dev/null) || {
+        local exit_code=$?
+        if [[ $exit_code -eq 124 ]]; then
+            log_error "Timeout after ${TIMEOUT}s"
+        elif [[ $exit_code -eq 42 ]]; then
+            log_error "Gemini CLI: bad input (exit 42)"
+        elif [[ $exit_code -eq 53 ]]; then
+            log_error "Gemini CLI: turn limit reached (exit 53)"
+        else
+            log_error "Gemini CLI failed (exit code: ${exit_code})"
+        fi
+        exit 1
+    }
+
+    log_ok "Research complete!"
+
+    RESULT=$(echo "$RAW_OUTPUT" | python3 -c "
+import sys, json
+try:
+    data = json.load(sys.stdin)
+    print(data.get('response', data.get('text', '[No response field in output]')))
+except (json.JSONDecodeError, KeyError):
+    print(sys.stdin.read())
+" 2>/dev/null) || RESULT="$RAW_OUTPUT"
+}
+
+# ─── Cleanup ─────────────────────────────────────────────────────────────────
+
+cleanup() {
+    local exit_code=$?
+    if [[ $exit_code -ne 0 ]] && [[ "$RUNNER" == "opencode" ]] && [[ -n "${SESSION_ID:-}" ]]; then
+        log_warn "Aborting session ${SESSION_ID}..."
+        curl -sf -X POST "${BASE_URL}/session/${SESSION_ID}/abort" >/dev/null 2>&1 || true
+    fi
+}
+trap cleanup EXIT
+
+# ─── Runner Dispatch ─────────────────────────────────────────────────────────
+
+RESULT=""
+
+case "$RUNNER" in
+    opencode) run_with_opencode ;;
+    claude)   run_with_claude ;;
+    gemini)   run_with_gemini ;;
+esac
+
+if $DRY_RUN; then
+    exit 0
 fi
 
 # ─── Output ─────────────────────────────────────────────────────────────────────
@@ -569,12 +727,17 @@ echo -e "${BOLD}─────────────────────�
 echo -e "${GREEN}${BOLD}Research Complete${NC}"
 echo -e "${BOLD}────────────────────────────────────────${NC}"
 echo ""
-echo -e "  Session:  ${SESSION_ID}"
+[[ -n "${SESSION_ID:-}" ]] && echo -e "  Session:  ${SESSION_ID}"
 echo -e "  Project:  ${CYAN}${FULL_NAME}${NC}"
 [[ -n "$LOG_FILE" ]] && echo -e "  Log:      ${LOG_FILE}"
 echo ""
 
 RESEARCH_MD=$(echo "$RESULT" | grep -oE '/[^ ]*RESEARCH\.md' | head -1)
+# Fallback to canonical path for CLI runners
+if [[ -z "$RESEARCH_MD" ]]; then
+    CANONICAL_PATH="${CLONE_DIR}/${OWNER}/${REPO}/RESEARCH.md"
+    [[ -f "$CANONICAL_PATH" ]] && RESEARCH_MD="$CANONICAL_PATH"
+fi
 if [[ -n "$RESEARCH_MD" ]]; then
     echo -e "  Output:   ${GREEN}${RESEARCH_MD}${NC}"
     if [[ -f "$RESEARCH_MD" ]]; then
@@ -584,7 +747,7 @@ if [[ -n "$RESEARCH_MD" ]]; then
     fi
 else
     echo -e "  ${YELLOW}RESEARCH.md path not found in output.${NC}"
-    echo -e "  Check:    \${GITHUB_RESEARCHER_CLONE_DIR:-\$HOME/.github-researcher/projects}/${OWNER}/${REPO}/"
+    echo -e "  Check:    ${CLONE_DIR}/${OWNER}/${REPO}/"
 fi
 
 echo ""

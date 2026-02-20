@@ -7,7 +7,7 @@
 Prompt-only OpenCode skill for researching GitHub projects. Analyzes capabilities, architecture, security, fitness, and competitors. Generates RESEARCH.md documentation and maintains KNOWLEDGE_BASE.md.
 
 **Key Files:**
-- `research.sh` — CLI wrapper for OpenCode server
+- `research.sh` — Multi-runner CLI (opencode/claude/gemini)
 - `SKILL.md` — Skill definition with full workflow (load via skill tool)
 - `agents/` — Detailed style and workflow guides
 
@@ -43,7 +43,8 @@ Prompt-only OpenCode skill for researching GitHub projects. Analyzes capabilitie
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--port PORT` | 13456 | OpenCode server port |
+| `--runner RUNNER` | opencode | Execution backend: opencode, claude, gemini |
+| `--port PORT` | 13456 | OpenCode server port (opencode only) |
 | `--async` | false | Async mode (non-blocking) |
 | `--log` | false | Save session log |
 | `--log-dir DIR` | `~/.github-researcher/logs` | Custom log directory |
@@ -176,7 +177,7 @@ This project uses only standard Unix tools. No npm, pip, or other package manage
 
 ```
 github-project-researcher/
-├── research.sh          # Main CLI script
+├── research.sh          # Multi-runner CLI script
 ├── SKILL.md             # OpenCode skill definition (1000+ lines)
 ├── README.md            # Project overview
 ├── LICENSE              # MIT license
@@ -249,6 +250,14 @@ $LOG_BASE/{owner}_{repo}_{timestamp}/SESSION.md
 # Full test with small repo
 ./research.sh https://github.com/octocat/Hello-World --async
 ```
+
+---
+
+## Recommended Tools
+
+### fast-edit
+
+For large file edits (SKILL_FULL.md, workflow.md) and batch modifications, use [fast-edit](https://github.com/includewudi/fast-edit) — a specialized skill for fast, reliable large-file editing that avoids timeout issues with standard Edit/Write tools.
 
 ---
 

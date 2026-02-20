@@ -32,6 +32,13 @@ Set these environment variables before use (or rely on defaults):
 
 **日志位置：** `$LOG_BASE/{owner}_{repo}_{timestamp}/SESSION.md`
 
+**其他 Runner：** 如无 OpenCode Server，可使用 Claude 或 Gemini CLI：
+
+```bash
+./research.sh <github_url> --runner claude
+./research.sh <github_url> --runner gemini
+```
+
 ## When to Use
 
 - Research a GitHub project's capabilities and use cases
@@ -69,14 +76,15 @@ User: "What are alternatives to freqtrade for algo trading?" # Step 7
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--async` | - | 异步模式（推荐） |
-| `--log` | - | 保存会话日志 |
-| `--verbose` | - | 显示实时进度 |
+| `--runner RUNNER` | opencode | 执行后端：opencode / claude / gemini |
+| `--async` | - | 异步模式（仅 opencode） |
+| `--log` | - | 保存会话日志（仅 opencode） |
+| `--verbose` | - | 显示实时进度（仅 opencode） |
 | `--log-dir DIR` | `~/.github-researcher/logs` | 自定义日志目录 |
-| `--agent AGENT` | sisyphus | 指定 agent |
+| `--agent AGENT` | sisyphus | 指定 agent（仅 opencode） |
 | `--model MODEL` | default | 指定模型 |
 | `--timeout SECS` | 3600 | 超时时间 |
-| `--dry-run` | - | 健康检查 |
+| `--dry-run` | - | 预检查 |
 
 ## Research Workflow
 
@@ -552,7 +560,7 @@ This step was evolved from the SkillScan large-scale study (arXiv:2601.10338, Ja
 
 ```bash
 # Find all agent/skill configuration files
-ls -la AGENTS.md CLAUDE.md .cursorrules .cursor/ .aider* .continue/ .github/copilot-instructions.md 2>/dev/null
+ls -la AGENTS.md CLAUDE.md .cursorrules .cursor/ .cursor/rules/*.mdc .aider* .continue/ .github/copilot-instructions.md copilot-instructions.md 2>/dev/null
 
 # Find MCP server configurations
 find . -name "mcp*.json" -o -name ".mcp*" -o -name "mcp-config*" 2>/dev/null | grep -v node_modules
@@ -568,18 +576,18 @@ find . -name "SKILL*.md" -o -name "*.skill" -o -name "instructions*.md" 2>/dev/n
 ```bash
 # T1: Prompt Injection — instructions that hijack agent behavior
 # Look for: system prompt overrides, role reassignment, instruction to ignore previous context
-grep -iE "ignore previous|ignore above|you are now|new role|disregard|override|forget your|act as" AGENTS.md CLAUDE.md .cursorrules 2>/dev/null
+grep -iE "ignore previous|ignore above|you are now|new role|disregard|override|forget your|act as" AGENTS.md CLAUDE.md .cursorrules .cursor/rules/*.mdc .github/copilot-instructions.md copilot-instructions.md 2>/dev/null
 
 # T2: Data Exfiltration — instructions to send data to external servers
 # Look for: curl/fetch/requests to non-project domains, encoded data transmission
-grep -iE "curl.*http|fetch\(|requests\.(post|get|put)|wget |nc |ncat " AGENTS.md CLAUDE.md .cursorrules 2>/dev/null
-grep -iE "base64|encode|exfil|send.*to.*server|upload.*to" AGENTS.md CLAUDE.md .cursorrules 2>/dev/null
+grep -iE "curl.*http|fetch\(|requests\.(post|get|put)|wget |nc |ncat " AGENTS.md CLAUDE.md .cursorrules .cursor/rules/*.mdc .github/copilot-instructions.md copilot-instructions.md 2>/dev/null
+grep -iE "base64|encode|exfil|send.*to.*server|upload.*to" AGENTS.md CLAUDE.md .cursorrules .cursor/rules/*.mdc .github/copilot-instructions.md copilot-instructions.md 2>/dev/null
 
 # T3: Privilege Escalation — instructions to execute commands or access sensitive files
-grep -iE "sudo|chmod|rm -rf|eval\(|exec\(|os\.system|subprocess|child_process|\.ssh/|\.env|/etc/passwd|credentials" AGENTS.md CLAUDE.md .cursorrules 2>/dev/null
+grep -iE "sudo|chmod|rm -rf|eval\(|exec\(|os\.system|subprocess|child_process|\.ssh/|\.env|/etc/passwd|credentials" AGENTS.md CLAUDE.md .cursorrules .cursor/rules/*.mdc .github/copilot-instructions.md copilot-instructions.md 2>/dev/null
 
 # T4: Supply Chain Amplification — instructions to install/recommend other tools
-grep -iE "npm install|pip install|npx |cargo install|go install|brew install|curl.*\|.*sh|install.*skill|add.*dependency" AGENTS.md CLAUDE.md .cursorrules 2>/dev/null
+grep -iE "npm install|pip install|npx |cargo install|go install|brew install|curl.*\|.*sh|install.*skill|add.*dependency" AGENTS.md CLAUDE.md .cursorrules .cursor/rules/*.mdc .github/copilot-instructions.md copilot-instructions.md 2>/dev/null
 ```
 
 #### 3.3.1.3 AI Agent Safety Scoring
@@ -1010,11 +1018,56 @@ This scoring system was evolved from the analysis of OpenSSF Scorecard checks, S
 > - **5-9**: Significant gaps — use with caution, consider alternatives
 > - **0-4**: Do NOT use in production without major remediation
 
+### Scorecard API (Optional Enrichment)
+
+When available, supplement manual checks with [OpenSSF Scorecard](https://scorecard.dev/) data:
+
+```bash
+# Fetch Scorecard for a public GitHub project
+curl -s "https://api.scorecard.dev/projects/github.com/{owner}/{repo}" | python3 -c "
+import sys, json
+data = json.load(sys.stdin)
+print(f'Scorecard: {data.get(\"score\", \"N/A\")}/10')
+for check in data.get('checks', []):
+    print(f'  {check[\"name\"]}: {check[\"score\"]}/10 — {check.get(\"reason\", \"\")}')
+" 2>/dev/null || echo "Scorecard not available for this project"
+```
+
+**Merge with manual scoring:** Scorecard covers Supply Chain + Infrastructure dimensions. Use it to validate or supplement your manual S1-S5 and I1-I5 checks. If Scorecard disagrees with your manual check, investigate the discrepancy.
+
+| Scorecard Check | Maps To |
+|-----------------|---------|
+| Pinned-Dependencies | S2 |
+| Dependency-Update-Tool | S3 |
+| Binary-Artifacts | S4 |
+| Signed-Releases | S5 |
+| SAST | I4 |
+| Branch-Protection | I2 |
+| CI-Tests | I3 |
+| Security-Policy | I1 |
+
 ## Step 4.2: Ecosystem Audit — Currency & Modern Replacements
 
 **When to Use:** When the project makes recommendations, endorses tools, or prescribes workflows — especially if the project is older than 2 years.
 
 This step was evolved from researching `realpython/python-guide` where 5 parallel librarian agents + 2 web searches were needed ad-hoc to audit 2018-era recommendations against 2026 reality. The guide recommended `pip` + `virtualenv` + `Pipenv` while the ecosystem had moved to `uv` + `ruff` + `pyproject.toml`.
+
+### 4.2.0 Ecosystem Audit Gate (MANDATORY)
+
+Before running the full audit, count claim-bearing statements:
+
+```bash
+CLAIM_COUNT=$(rg -c "recommend|best practice|should|avoid|prefer|use.*instead|don't use|we suggest" --include="*.rst" --include="*.md" . 2>/dev/null | awk -F: '{s+=$2} END {print s+0}')
+echo "Claims found: $CLAIM_COUNT"
+```
+
+| Claims Found | Action |
+|-------------|--------|
+| < 5 | **SKIP** Step 4.2 entirely — insufficient claims to audit |
+| 5-15 | Run lightweight audit (Steps 4.2.1-4.2.3, 2-3 librarian agents) |
+| > 15 | Run full audit (Steps 4.2.1-4.2.4, 3-6 librarian agents) |
+
+> **Why:** Firing 5+ parallel agents for a project with 2 opinionated sentences wastes resources. Gate first.
 
 ### 4.2.1 Extract Claims/Recommendations Inventory
 
@@ -1208,6 +1261,16 @@ Add domain evaluation section:
 Create `RESEARCH.md` in the cloned directory:
 
 ```markdown
+---
+project: "{Project Name}"
+repository_url: "{url}"
+researched_at: "{date}"
+overall_score: "{n}/80"
+security_posture: "{n}/20"
+verdict: "{Use / Don't Use / Use with Caution}"
+tags: ["{tag1}", "{tag2}"]
+---
+
 # {Project Name} Research Report
 
 **Researched:** {date}

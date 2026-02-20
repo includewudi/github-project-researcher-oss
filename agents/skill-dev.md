@@ -326,3 +326,12 @@ Add to Step 7.1:
 # Alternative search
 gh search repos "{domain} {keyword}" --limit 20
 ```
+
+---
+
+## Recommended Tools for Skill Editing
+
+When editing large skill files like `SKILL_FULL.md` (1600+ lines):
+
+- **[fast-edit](https://github.com/includewudi/fast-edit)** — Specialized for large-file edits, batch modifications, and multi-file writes. Avoids timeout issues common with standard Edit/Write tools on files >500 lines.
+- Prefer fast-edit over manual Edit tool for any change spanning multiple sections of SKILL_FULL.md.

@@ -2,7 +2,7 @@
 
 **English** | [中文](README_ZH.md)
 
-Prompt-only [OpenCode](https://github.com/anomalyco/opencode) skill for researching GitHub projects.
+Prompt-only AI [OpenCode](https://github.com/anomalyco/opencode) skill for researching GitHub projects.
 
 ## What it does
 
@@ -60,15 +60,27 @@ export GITHUB_RESEARCHER_LOG_DIR="$HOME/research/logs"
 
 # Custom agent/model
 ./research.sh https://github.com/owner/repo --agent build --model "provider/model"
+
+# Use Claude Code CLI (no server required)
+./research.sh https://github.com/owner/repo --runner claude
+
+# Use Gemini CLI (no server required)
+./research.sh https://github.com/owner/repo --runner gemini
 ```
 
 ## Requirements
 
-- [OpenCode](https://github.com/anomalyco/opencode) with server mode (`opencode serve`)
+**Core:**
 - `bash` 4.0+
-- `curl`
 - `python3`
 - `gh` CLI (optional, for richer GitHub data)
+
+**Per-Runner:**
+| Runner | Requirement |
+|--------|-------------|
+| `opencode` (default) | [OpenCode](https://github.com/anomalyco/opencode) server (`opencode serve`) + `curl` |
+| `claude` | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI + `ANTHROPIC_API_KEY` |
+| `gemini` | [Gemini CLI](https://github.com/google-gemini/gemini-cli) + `GEMINI_API_KEY` |
 
 ## Workflow
 
@@ -88,7 +100,7 @@ export GITHUB_RESEARCHER_LOG_DIR="$HOME/research/logs"
 
 ```
 github-project-researcher/
-├── research.sh          # CLI wrapper for OpenCode server
+├── research.sh          # Multi-runner CLI for project research
 ├── SKILL.md             # Compact skill definition (loaded by default)
 ├── SKILL_FULL.md        # Full reference with detailed commands & templates
 ├── AGENTS.md            # AI agent guidance

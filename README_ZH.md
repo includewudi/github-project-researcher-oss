@@ -2,7 +2,7 @@
 
 [English](README.md) | **中文**
 
-纯 Prompt 驱动的 [OpenCode](https://github.com/anomalyco/opencode) 技能，用于深度研究 GitHub 项目。
+纯 Prompt 驱动的 AI [OpenCode](https://github.com/anomalyco/opencode) 技能，用于深度研究 GitHub 项目。
 
 ## 功能
 
@@ -60,15 +60,27 @@ export GITHUB_RESEARCHER_LOG_DIR="$HOME/research/logs"
 
 # 自定义 agent/模型
 ./research.sh https://github.com/owner/repo --agent build --model "provider/model"
+
+# 使用 Claude Code CLI（无需服务器）
+./research.sh https://github.com/owner/repo --runner claude
+
+# 使用 Gemini CLI（无需服务器）
+./research.sh https://github.com/owner/repo --runner gemini
 ```
 
 ## 依赖
 
-- [OpenCode](https://github.com/anomalyco/opencode) 并启用 server 模式（`opencode serve`）
+**基础依赖：**
 - `bash` 4.0+
-- `curl`
 - `python3`
 - `gh` CLI（可选，用于获取更丰富的 GitHub 数据）
+
+**Runner 依赖：**
+| Runner | 依赖 |
+|--------|------|
+| `opencode`（默认） | [OpenCode](https://github.com/anomalyco/opencode) 服务器（`opencode serve`）+ `curl` |
+| `claude` | [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI + `ANTHROPIC_API_KEY` |
+| `gemini` | [Gemini CLI](https://github.com/google-gemini/gemini-cli) + `GEMINI_API_KEY` |
 
 ## 工作流程
 
@@ -88,7 +100,7 @@ export GITHUB_RESEARCHER_LOG_DIR="$HOME/research/logs"
 
 ```
 github-project-researcher/
-├── research.sh          # OpenCode server 的 CLI 封装
+├── research.sh          # 多 Runner 研究 CLI
 ├── SKILL.md             # 精简版技能定义（默认加载）
 ├── SKILL_FULL.md        # 完整参考，含详细命令和模板
 ├── AGENTS.md            # AI agent 开发指南

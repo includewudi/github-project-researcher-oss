@@ -155,7 +155,7 @@ fi
 ```bash
 cleanup() {
     local exit_code=$?
-    if [[ $exit_code -ne 0 ]] && [[ -n "${SESSION_ID:-}" ]]; then
+    if [[ $exit_code -ne 0 ]] && [[ "$RUNNER" == "opencode" ]] && [[ -n "${SESSION_ID:-}" ]]; then
         curl -sf -X POST "${BASE_URL}/session/${SESSION_ID}/abort" >/dev/null 2>&1 || true
     fi
 }
