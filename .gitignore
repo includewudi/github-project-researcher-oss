@@ -1,0 +1,22 @@
+# Research outputs (generated per-project)
+RESEARCH.md
+COMPETITORS.md
+KNOWLEDGE_BASE.md
+
+# Session logs
+SESSION.md
+*.log
+
+# Cloned project directories
+projects/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
