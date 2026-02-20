@@ -540,6 +540,177 @@ grep -r "\.unwrap()" --include="*.rs" . 2>/dev/null | grep -v ".git\|target" | w
 | **Crypto** | Weak algorithms, hardcoded keys |
 | **Input** | Unvalidated user input |
 
+### 3.3.1 AI Agent Safety Analysis
+
+**When to Use:** Always — assess whether the project is safe to use as an AI agent skill/tool, or whether it contains patterns that could compromise an AI agent's integrity.
+
+This step was evolved from the SkillScan large-scale study (arXiv:2601.10338, Jan 2026) which found **26.1% of 42,447 agent skills** contain at least one vulnerability, and the Clinejection incident (Feb 2026) where Cline's AI issue triage bot was weaponized into a supply chain attack vector.
+
+> **Context:** As AI coding tools (Claude Code, Cursor, Copilot) become widespread, more projects ship with agent configuration files (`.cursorrules`, `AGENTS.md`, `CLAUDE.md`). These files are implicitly trusted by agents but can contain prompt injection, data exfiltration, or privilege escalation payloads.
+
+#### 3.3.1.1 Detect Agent Configuration Files
+
+```bash
+# Find all agent/skill configuration files
+ls -la AGENTS.md CLAUDE.md .cursorrules .cursor/ .aider* .continue/ .github/copilot-instructions.md 2>/dev/null
+
+# Find MCP server configurations
+find . -name "mcp*.json" -o -name ".mcp*" -o -name "mcp-config*" 2>/dev/null | grep -v node_modules
+
+# Find skill/instruction files
+find . -name "SKILL*.md" -o -name "*.skill" -o -name "instructions*.md" 2>/dev/null | grep -v node_modules
+```
+
+#### 3.3.1.2 Analyze Agent Config Content (if found)
+
+**Check each agent config file against 4 threat categories:**
+
+```bash
+# T1: Prompt Injection — instructions that hijack agent behavior
+# Look for: system prompt overrides, role reassignment, instruction to ignore previous context
+grep -iE "ignore previous|ignore above|you are now|new role|disregard|override|forget your|act as" AGENTS.md CLAUDE.md .cursorrules 2>/dev/null
+
+# T2: Data Exfiltration — instructions to send data to external servers
+# Look for: curl/fetch/requests to non-project domains, encoded data transmission
+grep -iE "curl.*http|fetch\(|requests\.(post|get|put)|wget |nc |ncat " AGENTS.md CLAUDE.md .cursorrules 2>/dev/null
+grep -iE "base64|encode|exfil|send.*to.*server|upload.*to" AGENTS.md CLAUDE.md .cursorrules 2>/dev/null
+
+# T3: Privilege Escalation — instructions to execute commands or access sensitive files
+grep -iE "sudo|chmod|rm -rf|eval\(|exec\(|os\.system|subprocess|child_process|\.ssh/|\.env|/etc/passwd|credentials" AGENTS.md CLAUDE.md .cursorrules 2>/dev/null
+
+# T4: Supply Chain Amplification — instructions to install/recommend other tools
+grep -iE "npm install|pip install|npx |cargo install|go install|brew install|curl.*\|.*sh|install.*skill|add.*dependency" AGENTS.md CLAUDE.md .cursorrules 2>/dev/null
+```
+
+#### 3.3.1.3 AI Agent Safety Scoring
+
+| Threat Category | What to Check | Risk Level |
+|-----------------|---------------|------------|
+| **T1 Prompt Injection** | Agent config contains instructions that override/hijack agent behavior | 🔴 Critical |
+| **T2 Data Exfiltration** | Agent config instructs sending env/code/secrets to external servers | 🔴 Critical |
+| **T3 Privilege Escalation** | Agent config requests shell execution, file system access, or credential access | 🟠 High |
+| **T4 Supply Chain** | Agent config recommends installing additional packages/skills without pinned versions | 🟡 Medium |
+| **T5 Incentive Traps** | Points/credits/reputation systems that incentivize deeper agent engagement | 🟡 Medium |
+
+**Scoring:**
+
+```
+AI AGENT SAFETY (0-5):
+  □ No agent config files, or configs are benign         (+1)
+  □ No data exfiltration patterns in configs             (+1)
+  □ No shell execution instructions in configs           (+1)
+  □ No supply chain amplification (unpinned installs)    (+1)
+  □ No prompt injection / behavior hijacking patterns    (+1)
+─────
+Agent Safety Score: /5
+```
+
+#### 3.3.1.4 Report in RESEARCH.md
+
+```markdown
+### AI Agent Safety Assessment
+
+**Agent Config Files Found:** {list or "None"}
+**Safety Level:** {Safe / Caution / Unsafe}
+
+| Threat | Found? | Evidence |
+|--------|--------|----------|
+| T1 Prompt Injection | ✅/❌ | {details} |
+| T2 Data Exfiltration | ✅/❌ | {details} |
+| T3 Privilege Escalation | ✅/❌ | {details} |
+| T4 Supply Chain | ✅/❌ | {details} |
+| T5 Incentive Traps | ✅/❌ | {details} |
+
+**Agent Safety Score:** {n}/5
+**Recommendation:** {Safe to use as skill / Review before use / Do NOT use as skill}
+```
+
+> **References:** SkillScan (arXiv:2601.10338), Clinejection (Snyk, 2026-02-19), Mitiga Labs "License to SKILL" (2026-02-17), OWASP Top 10 for Agentic Applications 2026.
+
+### 3.3.2 CI/CD Security Analysis
+
+**When to Use:** Always for projects with GitHub Actions workflows — CI/CD pipelines are the #1 exploited attack surface in 2026.
+
+This step was evolved from the Clinejection incident (Feb 2026) where a `pull_request_target` workflow with `issues: write` + `contents: write` permissions allowed an attacker to push malicious code by simply opening a GitHub issue.
+
+#### 3.3.2.1 Detect CI/CD Configurations
+
+```bash
+# Find all workflow files
+ls -la .github/workflows/*.yml .github/workflows/*.yaml 2>/dev/null
+ls -la .gitlab-ci.yml .travis.yml Jenkinsfile .circleci/config.yml 2>/dev/null
+```
+
+#### 3.3.2.2 Analyze GitHub Actions Workflows
+
+```bash
+# C1: pull_request_target — dangerous if combined with code checkout
+grep -l "pull_request_target" .github/workflows/*.yml 2>/dev/null
+# If found, check if it also checks out PR code (CRITICAL vulnerability)
+grep -A 20 "pull_request_target" .github/workflows/*.yml 2>/dev/null | grep -E "actions/checkout|ref:.*github.event.pull_request"
+
+# C2: Overly permissive permissions
+grep -E "permissions:.*write-all|permissions:.*contents:.*write|permissions:.*actions:.*write" .github/workflows/*.yml 2>/dev/null
+
+# C3: Unpinned actions (should use SHA, not tags)
+grep -E "uses:.*@(main|master|latest|v[0-9]+)$" .github/workflows/*.yml 2>/dev/null
+
+# C4: Script injection via untrusted input
+grep -E "\$\{\{.*github\.event\.(issue|pull_request|comment).*\}\}" .github/workflows/*.yml 2>/dev/null
+
+# C5: Secrets exposed to forks / PR workflows
+grep -B 5 -A 5 "secrets\." .github/workflows/*.yml 2>/dev/null | grep -E "pull_request|fork"
+
+# C6: Self-hosted runners (supply chain risk)
+grep -E "runs-on:.*self-hosted" .github/workflows/*.yml 2>/dev/null
+```
+
+#### 3.3.2.3 CI/CD Security Scoring
+
+| Check | Risk | What It Means |
+|-------|------|---------------|
+| **C1 `pull_request_target` + checkout** | 🔴 Critical | Attacker can execute arbitrary code via PR |
+| **C2 Overly permissive** | 🟠 High | Compromised workflow can modify repo/releases |
+| **C3 Unpinned actions** | 🟠 High | Vulnerable to action supply chain attacks |
+| **C4 Script injection** | 🔴 Critical | Issue/PR title/body can inject commands |
+| **C5 Secrets in PR workflows** | 🟠 High | Fork PRs can exfiltrate secrets |
+| **C6 Self-hosted runners** | 🟡 Medium | Persistent access to infrastructure |
+
+**Scoring:**
+
+```
+CI/CD SECURITY (0-5):
+  □ No pull_request_target + checkout combo              (+1)
+  □ Permissions follow least-privilege principle          (+1)
+  □ Actions pinned by SHA (not tag/branch)               (+1)
+  □ No script injection via untrusted event data         (+1)
+  □ Secrets not exposed to fork/PR workflows             (+1)
+─────
+CI/CD Security Score: /5
+```
+
+#### 3.3.2.4 Report in RESEARCH.md
+
+```markdown
+### CI/CD Security Assessment
+
+**Workflows Found:** {count} GitHub Actions workflows
+**Security Level:** {Secure / Needs Review / Vulnerable}
+
+| Check | Status | Evidence |
+|-------|--------|----------|
+| C1 pull_request_target | ✅ Safe / 🔴 Vulnerable | {details} |
+| C2 Permission scope | ✅ Minimal / 🟠 Over-permissive | {details} |
+| C3 Action pinning | ✅ SHA-pinned / 🟠 Tag-pinned | {details} |
+| C4 Script injection | ✅ Safe / 🔴 Vulnerable | {details} |
+| C5 Secret exposure | ✅ Safe / 🟠 At risk | {details} |
+| C6 Self-hosted runners | ✅ None / 🟡 Present | {details} |
+
+**CI/CD Security Score:** {n}/5
+```
+
+> **References:** Clinejection (Snyk, 2026-02-19), GitHub Actions Security Hardening Guide, StepSecurity Harden-Runner.
+
 ### 3.4 Code Quality Analysis
 
 ```bash
@@ -754,23 +925,90 @@ Compare against user's specific needs:
 | **Compatibility** | Language, runtime, OS support? |
 | **Maintenance** | Active development? Responsive maintainers? |
 | **Community** | Size, activity, documentation quality? |
-| **Security** | Known vulnerabilities? Security practices? |
+| **Security Posture** | Quantified security checklist (see below) |
 | **License** | Compatible with user's use case? |
 | **Integration** | Easy to integrate? Good API? |
 
-**Fitness Score (0-10):**
+**Fitness Score:**
 
 ```
-Functionality:  /10
-Compatibility:  /10
-Maintenance:    /10
-Community:      /10
-Security:       /10
-License:        /10
-Integration:    /10
------------------
-Total:          /70
+Functionality:      /10
+Compatibility:      /10
+Maintenance:        /10
+Community:          /10
+Security Posture:   /20  (quantified checklist below)
+License:            /10
+Integration:        /10
+─────────────────────────
+Total:              /80
 ```
+
+### Security Posture Checklist (/20)
+
+**Replaces the former subjective `Security: /10` with a quantified, evidence-based checklist.** Each item is binary (pass/fail). Score = count of passed items.
+
+This scoring system was evolved from the analysis of OpenSSF Scorecard checks, SkillScan vulnerability taxonomy (arXiv:2601.10338), and the Clinejection CI/CD attack (2026-02-19).
+
+#### Supply Chain Security (0-5)
+
+| # | Check | How to Verify | Source |
+|---|-------|---------------|--------|
+| S1 | Lockfile exists | `ls package-lock.json yarn.lock pnpm-lock.yaml Pipfile.lock poetry.lock Cargo.lock go.sum 2>/dev/null` | OpenSSF |
+| S2 | Dependencies pinned (not `*` or `latest`) | Check dep file for unpinned ranges | OpenSSF |
+| S3 | Dependency update tool enabled | `ls .github/dependabot.yml renovate.json .github/renovate.json 2>/dev/null` | OpenSSF |
+| S4 | No binary artifacts in repo | `find . -type f \( -name "*.exe" -o -name "*.dll" -o -name "*.so" -o -name "*.dylib" -o -name "*.bin" \) -not -path './.git/*' 2>/dev/null \| wc -l` | OpenSSF |
+| S5 | Releases signed or provenance available | `gh release view --json assets` — check for `.sig`, `.pem`, SLSA provenance | OpenSSF/SLSA |
+
+#### Code Security (0-5)
+
+| # | Check | How to Verify | Source |
+|---|-------|---------------|--------|
+| C1 | No hardcoded secrets found | Step 3.3 secret grep results | OWASP |
+| C2 | No dangerous eval/exec patterns | Step 3.3 eval/exec grep results | OWASP |
+| C3 | Input validation present | Check for validation libs or manual checks in handlers | OWASP |
+| C4 | No SQL injection patterns | Step 3.3 SQL injection grep results | OWASP |
+| C5 | Safe deserialization practices | Step 3.3 deserialization grep results | OWASP |
+
+#### Infrastructure Security (0-5)
+
+| # | Check | How to Verify | Source |
+|---|-------|---------------|--------|
+| I1 | `SECURITY.md` exists | `ls SECURITY.md .github/SECURITY.md 2>/dev/null` | GitHub/OpenSSF |
+| I2 | Branch protection signals | Check if default branch requires PR reviews (via `gh api repos/{o}/{r}/branches/{branch}/protection` or presence of CODEOWNERS) | OpenSSF |
+| I3 | CI/CD has tests | `.github/workflows/` contains test step | OpenSSF |
+| I4 | SAST tool configured | `ls .github/workflows/codeql*.yml .github/codeql/ .semgrep.yml .snyk 2>/dev/null` | OpenSSF |
+| I5 | CI/CD workflows secure | Step 3.3.2 CI/CD security score ≥ 4/5 | Clinejection |
+
+#### AI Agent Safety (0-5)
+
+| # | Check | How to Verify | Source |
+|---|-------|---------------|--------|
+| A1 | No agent config files, or configs are benign | Step 3.3.1 results | SkillScan |
+| A2 | No data exfiltration patterns in configs | Step 3.3.1 T2 check | Mitiga Labs |
+| A3 | No shell execution instructions in configs | Step 3.3.1 T3 check | SkillScan |
+| A4 | No supply chain amplification (unpinned installs) | Step 3.3.1 T4 check | SkillScan |
+| A5 | No prompt injection / behavior hijacking | Step 3.3.1 T1 check | OWASP Agentic |
+
+**Output in RESEARCH.md:**
+
+```markdown
+## Security Posture: {score}/20
+
+| Category | Score | Details |
+|----------|-------|---------|
+| Supply Chain | {n}/5 | {failed checks if any} |
+| Code Security | {n}/5 | {failed checks if any} |
+| Infrastructure | {n}/5 | {failed checks if any} |
+| AI Agent Safety | {n}/5 | {failed checks if any} |
+
+**Risk Level:** {Low (16-20) / Medium (10-15) / High (5-9) / Critical (0-4)}
+```
+
+> **Interpretation Guide:**
+> - **16-20**: Production-ready security posture
+> - **10-15**: Acceptable with known risks — document mitigations
+> - **5-9**: Significant gaps — use with caution, consider alternatives
+> - **0-4**: Do NOT use in production without major remediation
 
 ## Step 4.2: Ecosystem Audit — Currency & Modern Replacements
 
@@ -1002,6 +1240,25 @@ Create `RESEARCH.md` in the cloned directory:
 ## Vulnerabilities & Concerns
 
 {Security issues, code quality concerns, or "None found"}
+
+## Security Posture: {score}/20
+
+| Category | Score | Details |
+|----------|-------|---------|
+| Supply Chain | {n}/5 | {failed checks if any} |
+| Code Security | {n}/5 | {failed checks if any} |
+| Infrastructure | {n}/5 | {failed checks if any} |
+| AI Agent Safety | {n}/5 | {failed checks if any} |
+
+**Risk Level:** {Low (16-20) / Medium (10-15) / High (5-9) / Critical (0-4)}
+
+### AI Agent Safety
+
+{Step 3.3.1 findings — threat categories detected, agent config files found, or "No agent configuration files detected"}
+
+### CI/CD Security
+
+{Step 3.3.2 findings — workflow issues detected, or "No CI/CD security issues found"}
 
 ## Fitness Evaluation
 

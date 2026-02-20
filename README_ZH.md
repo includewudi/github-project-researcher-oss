@@ -2,7 +2,7 @@
 
 [English](README.md) | **中文**
 
-纯 Prompt 驱动的 [OpenCode](https://github.com/anthropics/opencode) 技能，用于深度研究 GitHub 项目。
+纯 Prompt 驱动的 [OpenCode](https://github.com/anomalyco/opencode) 技能，用于深度研究 GitHub 项目。
 
 ## 功能
 
@@ -18,7 +18,7 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/anthropics/github-project-researcher.git
+git clone https://github.com/includewudi/github-project-researcher-oss.git
 
 # 软链接到 OpenCode 技能目录
 mkdir -p ~/.config/opencode/skills/github-project-researcher
@@ -64,7 +64,7 @@ export GITHUB_RESEARCHER_LOG_DIR="$HOME/research/logs"
 
 ## 依赖
 
-- [OpenCode](https://github.com/anthropics/opencode) 并启用 server 模式（`opencode serve`）
+- [OpenCode](https://github.com/anomalyco/opencode) 并启用 server 模式（`opencode serve`）
 - `bash` 4.0+
 - `curl`
 - `python3`

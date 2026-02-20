@@ -79,9 +79,11 @@ User: "What are alternatives to freqtrade for algo trading?" # Step 7
 | **3.0** | **Project Type Gate** | Always | Route to docs vs code analysis |
 | **3.D** | **Docs Deep Analysis** | Docs-first projects | IA, build pipeline, quality scoring |
 | 3 | Deep Analysis (Code) | Code libraries | Language auto-detect, deps, security, quality |
+| **3.3.1** | **AI Agent Safety** | Projects with agent configs | Prompt injection, exfiltration, privilege escalation |
+| **3.3.2** | **CI/CD Security** | Projects with GH Actions | Workflow attacks, permissions, secret exposure |
 | **3.4.1** | **AI Detection** | Always | Assess AI involvement level |
 | **3.5** | **Architecture Analysis** | Complex projects | Patterns, hierarchy, extension points |
-| 4 | Evaluate Fitness | When checking requirements | 7-dimension scoring /70 |
+| 4 | Evaluate Fitness | When checking requirements | 7-dimension scoring /80 (Security Posture /20) |
 | **4.2** | **Ecosystem Audit** | Projects >2 years old | Parallel librarian agents for currency check |
 | **4.5** | **Domain Fitness** | Cross-domain evaluation | Gap analysis, reusability matrix, adaptation strategy |
 | 5 | Generate RESEARCH.md | Always | Comprehensive report in clone dir |
@@ -107,11 +109,13 @@ User: "What are alternatives to freqtrade for algo trading?" # Step 7
 ### Step 3: Code Analysis
 - **3.A** Language auto-detect (MANDATORY) → set `$LANG_EXTS` for all greps
 - **3.1** Structure, **3.2** Dependencies, **3.3** Security (language-specific patterns), **3.4** Quality
+- **3.3.1** AI Agent Safety: scan agent configs for prompt injection, data exfiltration, privilege escalation
+- **3.3.2** CI/CD Security: check `pull_request_target`, permissions, action pinning, script injection, secrets
 - **3.4.1** AI-generated project detection (AGENTS.md, .cursorrules, commit patterns)
 - **3.5** Architecture: design patterns, component hierarchy (ASCII), extension points
 
 ### Steps 4, 4.2, 4.5: Evaluation
-- **Step 4**: 7-dimension fitness scoring /70
+- **Step 4**: 7-dimension fitness scoring /80 (Security Posture /20 quantified checklist)
 - **Step 4.2**: Extract recommendations → fire parallel librarian agents → Modern Replacements table
 - **Step 4.5**: Domain gap analysis → component reusability matrix → adaptation strategy (Wrap/Fork/Hybrid/Inspiration)
 
@@ -192,7 +196,7 @@ When a new project exhibits an **existing** KB pattern:
 |---------|-------|------|
 | **Quick Assessment** | 1 → 2 → README → verdict | 5 min |
 | **Deep Dive** | Full 1-7 workflow | 30 min |
-| **Security Audit** | 1 → 2 → 3.3 → deps CVE → report | 15 min |
+| **Security Audit** | 1 → 2 → 3.3 → 3.3.1 → 3.3.2 → deps CVE → Security Posture /20 | 15 min |
 | **Architecture Discovery** | 1 → 2 → 3.5 → document | 20 min |
 | **Cross-Domain Eval** | 1-4 → 4.5 → report | 25 min |
 | **Competitive Landscape** | 1-5 → 7 → COMPETITORS.md | 30 min |

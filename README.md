@@ -2,7 +2,7 @@
 
 **English** | [中文](README_ZH.md)
 
-Prompt-only [OpenCode](https://github.com/anthropics/opencode) skill for researching GitHub projects.
+Prompt-only [OpenCode](https://github.com/anomalyco/opencode) skill for researching GitHub projects.
 
 ## What it does
 
@@ -18,7 +18,7 @@ Prompt-only [OpenCode](https://github.com/anthropics/opencode) skill for researc
 
 ```bash
 # Clone the repository
-git clone https://github.com/anthropics/github-project-researcher.git
+git clone https://github.com/includewudi/github-project-researcher-oss.git
 
 # Symlink into OpenCode skills directory
 mkdir -p ~/.config/opencode/skills/github-project-researcher
@@ -64,7 +64,7 @@ export GITHUB_RESEARCHER_LOG_DIR="$HOME/research/logs"
 
 ## Requirements
 
-- [OpenCode](https://github.com/anthropics/opencode) with server mode (`opencode serve`)
+- [OpenCode](https://github.com/anomalyco/opencode) with server mode (`opencode serve`)
 - `bash` 4.0+
 - `curl`
 - `python3`

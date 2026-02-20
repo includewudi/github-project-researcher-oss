@@ -15,9 +15,11 @@ Quick reference for the 7-step research workflow.
                               Analysis             ├─ 3.1 Structure
                               ├─ 3.D.1 IA          ├─ 3.2 Dependencies
                               ├─ 3.D.2 Build       ├─ 3.3 Security
-                              ├─ 3.D.3 Coverage    ├─ 3.4 Quality
-                              ├─ 3.D.4 Writing     ├─ 3.4.1 AI Detection
-                              └─ 3.D.5 Links       └─ 3.5 Architecture
+                              ├─ 3.D.3 Coverage    │  ├─ 3.3.1 Agent Safety
+                              ├─ 3.D.4 Writing     │  └─ 3.3.2 CI/CD Security
+                              └─ 3.D.5 Links       ├─ 3.4 Quality
+                                                    ├─ 3.4.1 AI Detection
+                                                    └─ 3.5 Architecture
                                     └─────────┬─────────┘
                                               ↓
 4. Evaluate Fitness → 4.2 Ecosystem Audit → 4.5 Domain Fitness
@@ -141,6 +143,32 @@ grep -r "pickle.load\|yaml.load" --include="*.py" .
 grep -r "eval(\|new Function(" --include="*.js" --include="*.ts" .
 ```
 
+### 3.3.1 AI Agent Safety
+```bash
+# Find agent config files
+find . -type f \( -name "AGENTS.md" -o -name "CLAUDE.md" -o -name ".cursorrules" \
+  -o -name "*.mdc" -o -name "copilot-instructions.md" \) -not -path './.git/*'
+
+# Scan for prompt injection / exfiltration / shell execution patterns
+grep -rni "ignore previous\|disregard\|curl.*\|wget.*\|exec(\|subprocess" \
+  AGENTS.md CLAUDE.md .cursorrules .cursor/rules/*.mdc 2>/dev/null
+```
+
+### 3.3.2 CI/CD Security
+```bash
+# Check for pull_request_target (high risk)
+grep -r "pull_request_target" .github/workflows/ 2>/dev/null
+
+# Check workflow permissions
+grep -rA2 "permissions:" .github/workflows/ 2>/dev/null
+
+# Unpinned actions (using @master or @main instead of SHA)
+grep -r "uses:.*@\(main\|master\|latest\)" .github/workflows/ 2>/dev/null
+
+# Script injection via untrusted input
+grep -r '\${{.*github\.event' .github/workflows/ 2>/dev/null
+```
+
 ### 3.4.1 AI Detection
 ```bash
 ls -1 AGENTS.md CLAUDE.md .cursorrules 2>/dev/null | wc -l
@@ -171,10 +199,10 @@ grep -r "createFactory\|Provider" --include="*.ts" .
 | Compatibility | /10 |
 | Maintenance | /10 |
 | Community | /10 |
-| Security | /10 |
+| Security Posture | /20 |
 | License | /10 |
 | Integration | /10 |
-| **Total** | /70 |
+| **Total** | **/80** |
 
 ---
 
@@ -212,6 +240,7 @@ Sections:
 - Capabilities
 - Use Cases
 - Vulnerabilities & Concerns
+- Security Posture (/20 quantified checklist)
 - Fitness Evaluation
 - Recommendation
 - Quick Start
