@@ -27,18 +27,21 @@ ln -s "$(pwd)/SKILL.md" ~/.config/opencode/skills/github-project-researcher/SKIL
 
 ## Configuration
 
-All paths are configurable via environment variables:
+Copy `.env.local.example` to `.env.local` and customize:
+
+```bash
+cp .env.local.example .env.local
+```
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `GITHUB_RESEARCHER_CLONE_DIR` | `~/.github-researcher/projects` | Where researched projects are cloned |
-| `GITHUB_RESEARCHER_LOG_DIR` | `~/.github-researcher/logs` | Where session logs are saved |
+| `CLONE_DIR` | `~/.github-researcher/projects` | Where researched projects are cloned |
+| `LOG_DIR` | `~/.github-researcher/logs` | Where session logs are saved |
+| `PORT` | `13456` | OpenCode server port |
+| `AGENT` | `sisyphus` | Agent to use |
+| `TIMEOUT` | `3600` | Timeout in seconds |
 
-```bash
-# Example: customize clone and log directories
-export GITHUB_RESEARCHER_CLONE_DIR="$HOME/research/projects"
-export GITHUB_RESEARCHER_LOG_DIR="$HOME/research/logs"
-```
+`.env.local` is gitignored — safe for private paths.
 
 ## Usage
 
@@ -101,6 +104,7 @@ export GITHUB_RESEARCHER_LOG_DIR="$HOME/research/logs"
 ```
 github-project-researcher/
 ├── research.sh          # Multi-runner CLI for project research
+├── .env.local.example   # Config template (copy to .env.local)
 ├── SKILL.md             # Compact skill definition (loaded by default)
 ├── SKILL_FULL.md        # Full reference with detailed commands & templates
 ├── AGENTS.md            # AI agent guidance

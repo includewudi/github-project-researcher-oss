@@ -27,18 +27,21 @@ ln -s "$(pwd)/SKILL.md" ~/.config/opencode/skills/github-project-researcher/SKIL
 
 ## 配置
 
-所有路径均可通过环境变量配置：
+复制 `.env.local.example` 为 `.env.local` 并自定义：
+
+```bash
+cp .env.local.example .env.local
+```
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
-| `GITHUB_RESEARCHER_CLONE_DIR` | `~/.github-researcher/projects` | 研究项目的克隆目录 |
-| `GITHUB_RESEARCHER_LOG_DIR` | `~/.github-researcher/logs` | 会话日志保存目录 |
+| `CLONE_DIR` | `~/.github-researcher/projects` | 研究项目的克隆目录 |
+| `LOG_DIR` | `~/.github-researcher/logs` | 会话日志保存目录 |
+| `PORT` | `13456` | OpenCode 服务端口 |
+| `AGENT` | `sisyphus` | 使用的 Agent |
+| `TIMEOUT` | `3600` | 超时时间（秒） |
 
-```bash
-# 示例：自定义克隆和日志目录
-export GITHUB_RESEARCHER_CLONE_DIR="$HOME/research/projects"
-export GITHUB_RESEARCHER_LOG_DIR="$HOME/research/logs"
-```
+`.env.local` 已加入 gitignore，可安全存放私有路径。
 
 ## 使用方法
 

@@ -46,13 +46,21 @@ ASYNC=false
 DRY_RUN=false
 VERBOSE=false
 SAVE_LOG=false
-LOG_DIR="${GITHUB_RESEARCHER_LOG_DIR:-$HOME/.github-researcher/logs}"
-CLONE_DIR="${GITHUB_RESEARCHER_CLONE_DIR:-$HOME/.github-researcher/projects}"
+LOG_DIR="$HOME/.github-researcher/logs"
+CLONE_DIR="$HOME/.github-researcher/projects"
 GITHUB_URL=""
 SESSION_ID=""
 OWNER=""
 REPO=""
 LOG_FILE=""
+
+# ─── Load local config (gitignored) ─────────────────────────────────────────────
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "$SCRIPT_DIR/.env.local" ]]; then
+    # shellcheck source=/dev/null
+    source "$SCRIPT_DIR/.env.local"
+fi
 
 # ─── Colors ─────────────────────────────────────────────────────────────────────
 

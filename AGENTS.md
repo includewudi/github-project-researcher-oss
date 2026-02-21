@@ -178,6 +178,7 @@ This project uses only standard Unix tools. No npm, pip, or other package manage
 ```
 github-project-researcher/
 ├── research.sh          # Multi-runner CLI script
+├── .env.local.example   # Config template (copy to .env.local)
 ├── SKILL.md             # OpenCode skill definition (1000+ lines)
 ├── README.md            # Project overview
 ├── LICENSE              # MIT license

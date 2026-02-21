@@ -10,6 +10,9 @@ SESSION.md
 # Cloned project directories
 projects/
 
+# Local config
+.env.local
+
 # OS files
 .DS_Store
 Thumbs.db
