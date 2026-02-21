@@ -8,12 +8,33 @@ Self-evolving GitHub project research agent. Analyze projects, find vulnerabilit
 **Clone Directory:** `$CLONE_BASE/{author}/{repo}` (default: `~/.github-researcher/projects/{author}/{repo}`)
 **Log Directory:** `$LOG_BASE/{owner}_{repo}_{timestamp}` (default: `~/.github-researcher/logs/{owner}_{repo}_{timestamp}`)
 
+## Section Index
+
+| Step | Name | Description |
+|------|------|-------------|
+| — | Configuration | `.env.local` setup, path resolution |
+| 1 | Fetch Project Info | gh/webfetch/curl fallback chain |
+| 2 | Clone to Local | `{author}/{repo}` convention |
+| 3.0 | Project Type Gate | Route docs vs code vs mixed |
+| 3.D | Docs Deep Analysis | IA, build, coverage, quality |
+| 3 | Code Analysis | Structure, deps, security, quality |
+| 3.3.1 | AI Agent Safety | Prompt injection, exfiltration, escalation |
+| 3.3.2 | CI/CD Security | Workflow attacks, permissions, secrets |
+| 3.4.1 | AI Detection | AI-generated project assessment |
+| 3.5 | Architecture | Patterns, hierarchy, extensions |
+| 4 | Fitness Evaluation | 7-dimension scoring /80 |
+| 4.2 | Ecosystem Audit | Currency check for old projects |
+| 4.5 | Domain Fitness | Cross-domain applicability |
+| 5 | Generate RESEARCH.md | Output report template |
+| 6 | Update Knowledge Base | Pattern gate, hygiene, linking |
+| 7 | Competitor Analysis | Feature matrix, alternatives |
+
 ## Configuration
 
 Resolve `CLONE_BASE` and `LOG_BASE` by sourcing `.env.local` from the skill directory:
 
 ```bash
-SKILL_DIR="$(dirname "$(readlink -f ~/.config/opencode/skills/github-project-researcher/SKILL.md)")"
+SKILL_DIR="$(cd "$(dirname "$(readlink ~/.config/opencode/skills/github-project-researcher/SKILL.md 2>/dev/null || echo "$HOME/.config/opencode/skills/github-project-researcher/SKILL.md")")" && pwd)"
 if [[ -f "$SKILL_DIR/.env.local" ]]; then
     source "$SKILL_DIR/.env.local"
 fi
@@ -180,8 +201,12 @@ gh auth status 2>&1
 
 ```bash
 # Get repo metadata
-gh repo view {owner}/{repo} --json name,description,url,stargazerCount,forkCount,issues,pullRequests,latestRelease,licenseInfo,primaryLanguage,languages,repositoryTopics
+gh repo view {owner}/{repo} --json name,description,url,stargazerCount,forkCount,issues,pullRequests,latestRelease,licenseInfo,primaryLanguage,languages,repositoryTopics,isArchived
 
+
+# Archived repo short-circuit
+# If isArchived is true, produce a 1-paragraph verdict and skip Steps 2-7:
+#   "ARCHIVED: {owner}/{repo} — archived on {date}. Last commit: {date}. Stars: {n}. Skip."
 # Get README content
 gh api repos/{owner}/{repo}/readme --jq '.content' | base64 -d
 
@@ -292,6 +317,21 @@ ls conf.py mkdocs.yml mkdocs.yaml .readthedocs.yml docs/conf.py 2>/dev/null
 
 > **Rule:** When in doubt, run both paths. The docs path is lightweight and won't bloat the analysis.
 
+### 3.0.2 Monorepo Detection
+
+```bash
+# Detect monorepo structures
+ls packages/ apps/ libs/ lerna.json nx.json pnpm-workspace.yaml rush.json turbo.json 2>/dev/null
+```
+
+| Signal | Action |
+|--------|--------|
+| `packages/` or `apps/` + workspace config | Monorepo — scope analysis to dominant package |
+| `lerna.json` or `nx.json` or `turbo.json` | Build orchestrator detected — note in report |
+| Single `src/` directory | Standard layout — proceed normally |
+
+> **If monorepo detected:** Add note "Monorepo detected. Analysis scoped to primary package: {dir}" and focus analysis on the dominant package directory.
+
 ## Step 3.D: Documentation Project Deep Analysis
 
 **When to Use:** Routed here by Step 3.0 for repos that are primarily documentation (guides, tutorials, references).
@@ -341,7 +381,10 @@ for dir in docs/*/; do echo "$(find "$dir" -name '*.rst' -o -name '*.md' | wc -l
 find docs/ -name "*.rst" -o -name "*.md" | xargs grep -lE "^$|TODO|FIXME|placeholder|coming soon" 2>/dev/null
 
 # Last-modified signals per section
+# macOS
 find docs/ -name "*.rst" -o -name "*.md" -exec stat -f "%m %N" {} \; 2>/dev/null | sort -rn | head -20
+# Linux
+# find docs/ \( -name "*.rst" -o -name "*.md" \) -printf "%T@ %p\n" 2>/dev/null | sort -rn | head -20
 ```
 
 **Output:** Coverage heatmap — which sections are deep vs thin, which are stale.
@@ -470,6 +513,20 @@ ls -la src/ lib/ app/ 2>/dev/null || ls -la *.py *.js *.ts 2>/dev/null | head -1
 
 # Check for tests
 ls -la test/ tests/ __tests__/ spec/ 2>/dev/null
+
+# Test quality signals (adapt extensions to detected language)
+TEST_FILES=$(find . -type f \( -path "*/test*" -o -path "*/spec*" -o -path "*__tests__*" \) \( -name "*.py" -o -name "*.ts" -o -name "*.js" -o -name "*.go" -o -name "*.rs" \) -not -path './.git/*' -not -path './node_modules/*' 2>/dev/null | wc -l)
+SRC_FILES=$(find . -type f \( -name "*.py" -o -name "*.ts" -o -name "*.js" -o -name "*.go" -o -name "*.rs" \) -not -path './.git/*' -not -path './node_modules/*' -not -path '*/test*' -not -path '*/spec*' 2>/dev/null | wc -l)
+echo "Test:Source ratio: ${TEST_FILES}:${SRC_FILES}"
+
+# Assertion density
+grep -rc "assert\|expect\|should\|require\|must" test/ tests/ __tests__/ spec/ 2>/dev/null | tail -1
+
+# Mock overuse check
+grep -rc "mock\|stub\|patch\|spy\|fake" test/ tests/ __tests__/ spec/ 2>/dev/null | tail -1
+
+# CI runs tests?
+grep -rlE "pytest|npm test|go test|cargo test|jest|mocha|vitest" .github/workflows/ 2>/dev/null
 ```
 
 ### 3.2 Dependency Analysis
@@ -961,6 +1018,63 @@ Integration:        /10
 ─────────────────────────
 Total:              /80
 ```
+
+### Dimension Scoring Anchors
+
+Each non-security dimension uses a binary checklist to reduce subjectivity:
+
+**Functionality (/10)**
+| # | Check | Points |
+|---|-------|--------|
+| F1 | Core feature set matches user needs | +3 |
+| F2 | API/CLI documentation exists | +2 |
+| F3 | Configuration options for customization | +2 |
+| F4 | Error messages are actionable | +1 |
+| F5 | Backward compatibility maintained | +2 |
+
+**Compatibility (/10)**
+| # | Check | Points |
+|---|-------|--------|
+| P1 | Runs on user's target OS/runtime | +3 |
+| P2 | Language version requirements documented | +2 |
+| P3 | No conflicting peer dependencies | +2 |
+| P4 | Docker/container support available | +1 |
+| P5 | Cross-platform CI verified | +2 |
+
+**Maintenance (/10)**
+| # | Check | Points |
+|---|-------|--------|
+| M1 | Last commit within 90 days | +2 |
+| M2 | Issues responded to within 14 days | +2 |
+| M3 | Changelog or release notes maintained | +2 |
+| M4 | CI pipeline exists and passes | +2 |
+| M5 | CODEOWNERS or active maintainer list | +2 |
+
+**Community (/10)**
+| # | Check | Points |
+|---|-------|--------|
+| O1 | Stars > 100 (or appropriate for niche) | +2 |
+| O2 | Contributors > 5 | +2 |
+| O3 | README quality (quick start, examples) | +2 |
+| O4 | Discussion forum or Discord/Slack exists | +2 |
+| O5 | Stack Overflow tags or community content | +2 |
+
+**License (/10)**
+| # | Check | Points |
+|---|-------|--------|
+| L1 | License file present in repo | +3 |
+| L2 | License compatible with user's use case | +3 |
+| L3 | No CLA requirement for contributions | +2 |
+| L4 | Dependencies have compatible licenses | +2 |
+
+**Integration (/10)**
+| # | Check | Points |
+|---|-------|--------|
+| G1 | Install in ≤3 commands | +2 |
+| G2 | Working quick-start example | +2 |
+| G3 | Programmatic API (not just CLI) | +2 |
+| G4 | Plugin/extension system | +2 |
+| G5 | TypeScript types / type stubs available | +2 |
 
 ### Security Posture Checklist (/20)
 
@@ -1489,6 +1603,19 @@ New pattern found in project X
 
 This step was evolved from comparing Qlib against crypto trading frameworks.
 
+
+### 7.0 Keyword Derivation (before search)
+
+```bash
+# Extract search keywords from repo metadata
+gh repo view {owner}/{repo} --json repositoryTopics --jq '.repositoryTopics[]' 2>/dev/null
+head -5 README.md 2>/dev/null
+
+# Combine: repo topics + README first line + project category
+# Use 3-5 most descriptive keywords for competitor search
+```
+
+> **Minimum bar:** Identify ≥5 active competitors (last commit within 12 months). If GitHub search yields <5, supplement with awesome-list lookups and web search.
 ### 7.1 Discover Competitors
 
 Use multiple search strategies:

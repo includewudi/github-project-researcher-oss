@@ -16,7 +16,7 @@ Self-evolving GitHub project research agent. Analyze projects, find vulnerabilit
 Before any file operation, resolve `CLONE_BASE` and `LOG_BASE`:
 
 ```bash
-SKILL_DIR="$(dirname "$(readlink -f ~/.config/opencode/skills/github-project-researcher/SKILL.md)")"
+SKILL_DIR="$(cd "$(dirname "$(readlink ~/.config/opencode/skills/github-project-researcher/SKILL.md 2>/dev/null || echo "$HOME/.config/opencode/skills/github-project-researcher/SKILL.md")")" && pwd)"
 if [[ -f "$SKILL_DIR/.env.local" ]]; then
     source "$SKILL_DIR/.env.local"
 fi

@@ -53,6 +53,7 @@ SESSION_ID=""
 OWNER=""
 REPO=""
 LOG_FILE=""
+RESPONSE_FILE=""
 
 # ─── Load local config (gitignored) ─────────────────────────────────────────────
 
@@ -64,15 +65,20 @@ fi
 
 # ─── Colors ─────────────────────────────────────────────────────────────────────
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-CYAN='\033[0;36m'
-MAGENTA='\033[0;35m'
-BOLD='\033[1m'
-DIM='\033[2m'
-NC='\033[0m' # No Color
+# Respect NO_COLOR (https://no-color.org/) and non-interactive terminals
+if [[ -n "${NO_COLOR:-}" ]] || [[ ! -t 1 ]]; then
+    RED="" GREEN="" YELLOW="" BLUE="" CYAN="" MAGENTA="" BOLD="" DIM="" NC=""
+else
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[0;33m'
+    BLUE='\033[0;34m'
+    CYAN='\033[0;36m'
+    MAGENTA='\033[0;35m'
+    BOLD='\033[1m'
+    DIM='\033[2m'
+    NC='\033[0m' # No Color
+fi
 
 # ─── Helper Functions ───────────────────────────────────────────────────────────
 
@@ -175,6 +181,15 @@ case "$RUNNER" in
         ;;
 esac
 
+[[ "$PORT" =~ ^[0-9]+$ ]] || { log_error "Invalid --port: $PORT (must be numeric)"; exit 1; }
+[[ "$TIMEOUT" =~ ^[0-9]+$ ]] || { log_error "Invalid --timeout: $TIMEOUT (must be numeric)"; exit 1; }
+
+if [[ "$RUNNER" != "opencode" ]]; then
+    $ASYNC && log_warn "--async is only supported for --runner opencode"
+    $SAVE_LOG && log_warn "--log is only supported for --runner opencode"
+    $VERBOSE && log_warn "--verbose is only supported for --runner opencode"
+fi
+
 # ─── Parse GitHub URL ───────────────────────────────────────────────────────────
 
 parse_github_url() {
@@ -204,11 +219,11 @@ build_prompt() {
 加载 github-project-researcher 技能，研究 ${GITHUB_URL} 。
 
 要求：
-1. 走完 Step 1 到 Step 7 的全部流程
+1. 走完全部研究流程（信息采集、克隆、深度分析、评估、输出、知识库、竞品）
 2. 自动执行每个步骤，不需要等待我确认
-3. 根据 Step 3.0 的项目类型门控自动判断走代码分析还是文档分析路径
-4. 如果项目有推荐/建议且超过2年，执行 Step 4.2 生态审计
-5. 按照 Step 6.1 的KB卫生规则更新知识库
+3. 根据项目类型门控自动判断走代码分析还是文档分析路径
+4. 如果项目有推荐/建议且超过2年，执行生态审计
+5. 按照KB卫生规则更新知识库
 6. 完成后输出 RESEARCH.md 的完整路径
 PROMPT
 }
@@ -526,6 +541,10 @@ print('[No assistant response found]')
         log_info "This may take 5-30 minutes. Press Ctrl+C to abort."
         echo ""
 
+        if $SAVE_LOG; then
+            setup_log_dir
+        fi
+
         RESPONSE_FILE=$(mktemp)
 
         HTTP_CODE=$(curl -sf -o "$RESPONSE_FILE" -w "%{http_code}" \
@@ -617,7 +636,6 @@ run_with_claude() {
     echo ""
 
     local claude_args=("-p" "--output-format" "json")
-    claude_args+=("--allowedTools" "")
     [[ -n "$MODEL" ]] && claude_args+=("--model" "$MODEL")
 
     local RAW_OUTPUT
@@ -661,7 +679,7 @@ run_with_gemini() {
         log_info "Set it with: export GEMINI_API_KEY='...'"
     fi
 
-    log_ok "Gemini CLI found"
+    log_ok "Gemini CLI found: $(gemini --version 2>/dev/null || echo 'unknown version')"
 
     if $DRY_RUN; then
         echo ""
@@ -673,11 +691,11 @@ run_with_gemini() {
     log_info "This may take 5-30 minutes. Press Ctrl+C to abort."
     echo ""
 
-    local gemini_args=("--output-format" "json")
+    local gemini_args=()
     [[ -n "$MODEL" ]] && gemini_args+=("--model" "$MODEL")
 
     local RAW_OUTPUT
-    RAW_OUTPUT=$(timeout "$TIMEOUT" gemini "${gemini_args[@]}" "$RESEARCH_PROMPT" 2>/dev/null) || {
+    RAW_OUTPUT=$(echo "$RESEARCH_PROMPT" | timeout "$TIMEOUT" gemini "${gemini_args[@]}" 2>/dev/null) || {
         local exit_code=$?
         if [[ $exit_code -eq 124 ]]; then
             log_error "Timeout after ${TIMEOUT}s"
@@ -695,11 +713,12 @@ run_with_gemini() {
 
     RESULT=$(echo "$RAW_OUTPUT" | python3 -c "
 import sys, json
+text = sys.stdin.read()
 try:
-    data = json.load(sys.stdin)
-    print(data.get('response', data.get('text', '[No response field in output]')))
+    data = json.loads(text)
+    print(data.get('response', data.get('text', text)))
 except (json.JSONDecodeError, KeyError):
-    print(sys.stdin.read())
+    print(text)
 " 2>/dev/null) || RESULT="$RAW_OUTPUT"
 }
 
@@ -707,6 +726,7 @@ except (json.JSONDecodeError, KeyError):
 
 cleanup() {
     local exit_code=$?
+    [[ -n "${RESPONSE_FILE:-}" ]] && rm -f "$RESPONSE_FILE"
     if [[ $exit_code -ne 0 ]] && [[ "$RUNNER" == "opencode" ]] && [[ -n "${SESSION_ID:-}" ]]; then
         log_warn "Aborting session ${SESSION_ID}..."
         curl -sf -X POST "${BASE_URL}/session/${SESSION_ID}/abort" >/dev/null 2>&1 || true

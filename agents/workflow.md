@@ -210,10 +210,11 @@ grep -r "createFactory\|Provider" --include="*.ts" .
 
 For projects older than 2 years with recommendations:
 
-1. Extract claims inventory
-2. Fire 3-6 librarian agents in parallel
-3. Build modern replacements table
-4. Add appendix to RESEARCH.md
+1. **Gate check (4.2.0)**: Skip if project age < 2 years or `lastPushedAt` within 90 days with active releases
+2. Extract claims inventory
+3. Fire 3-6 librarian agents in parallel
+4. Build modern replacements table
+5. Add appendix to RESEARCH.md
 
 ---
 
@@ -257,7 +258,8 @@ Location: `$CLONE_BASE/KNOWLEDGE_BASE.md`
 
 **Verdict:** {one-line}
 **Key Insight:** {single learning}
-**Deep Dive:** [→](./{owner}/{repo}/RESEARCH.md)
+**Reusable Pattern:** {pattern or technique worth reusing}
+**Deep Dive:** [→](./{author}/{repo}/RESEARCH.md)
 **Tags:** {2-5 tags}
 ```
 
