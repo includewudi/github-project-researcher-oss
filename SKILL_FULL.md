@@ -10,7 +10,18 @@ Self-evolving GitHub project research agent. Analyze projects, find vulnerabilit
 
 ## Configuration
 
-Set these environment variables before use (or rely on defaults):
+Resolve `CLONE_BASE` and `LOG_BASE` by sourcing `.env.local` from the skill directory:
+
+```bash
+SKILL_DIR="$(dirname "$(readlink -f ~/.config/opencode/skills/github-project-researcher/SKILL.md)")"
+if [[ -f "$SKILL_DIR/.env.local" ]]; then
+    source "$SKILL_DIR/.env.local"
+fi
+CLONE_BASE="${CLONE_DIR:-$HOME/.github-researcher/projects}"
+LOG_BASE="${LOG_DIR:-$HOME/.github-researcher/logs}"
+```
+
+Run this **once** at the start of every research session. All subsequent `$CLONE_BASE` and `$LOG_BASE` references use the resolved values.
 
 | Variable | Default | Description |
 |----------|---------|-------------|

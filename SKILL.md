@@ -11,6 +11,21 @@ Self-evolving GitHub project research agent. Analyze projects, find vulnerabilit
 **Log Directory:** `$LOG_BASE/{owner}_{repo}_{timestamp}` (default: `~/.github-researcher/logs/`)
 **Full Reference:** Read `SKILL_FULL.md` for detailed bash commands, templates, and language-specific examples.
 
+## Path Resolution
+
+Before any file operation, resolve `CLONE_BASE` and `LOG_BASE`:
+
+```bash
+SKILL_DIR="$(dirname "$(readlink -f ~/.config/opencode/skills/github-project-researcher/SKILL.md)")"
+if [[ -f "$SKILL_DIR/.env.local" ]]; then
+    source "$SKILL_DIR/.env.local"
+fi
+CLONE_BASE="${CLONE_DIR:-$HOME/.github-researcher/projects}"
+LOG_BASE="${LOG_DIR:-$HOME/.github-researcher/logs}"
+```
+
+Run this **once** at the start of every research session. All subsequent `$CLONE_BASE` and `$LOG_BASE` references use the resolved values.
+
 ## Default Behavior
 
 当用户说"研究 xxx"或"Research xxx"时，默认使用以下命令：
