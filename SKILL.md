@@ -26,6 +26,36 @@ LOG_BASE="${LOG_DIR:-$HOME/.github-researcher/logs}"
 
 Run this **once** at the start of every research session. All subsequent `$CLONE_BASE` and `$LOG_BASE` references use the resolved values.
 
+---
+
+## 🚨 MANDATORY: Create TodoList Before Starting
+
+**Before executing any research step, ALWAYS create a TodoList to track progress:**
+
+```
+1. ☐ Step 1: Fetch Project Info
+2. ☐ Step 2: Clone to Local
+3. ☐ Step 3.0: Project Type Gate
+4. ☐ Step 3/3.D: Deep Analysis (Code or Docs)
+5. ☐ Step 4: Fitness Evaluation
+6. ☐ Step 5: Generate RESEARCH.md
+7. ☐ Step 6: Update Knowledge Base
+8. ☐ Step 7: Competitor Analysis (if requested)
+```
+
+**Rules:**
+- Mark each step `in_progress` before starting
+- Mark `completed` immediately after finishing
+- If step is skipped (e.g., archived repo), mark `completed` with note
+- User can see real-time progress through TodoList
+
+**This ensures:**
+- User visibility into research progress
+- No steps are forgotten
+- Easy recovery if interrupted
+
+---
+
 ## Default Behavior
 
 当用户说"研究 xxx"或"Research xxx"时，默认使用以下命令：
@@ -152,7 +182,7 @@ User: "What are alternatives to freqtrade for algo trading?" # Step 7
 
 ## Step 6: Update Knowledge Base (Core Rules)
 
-**KB Path:** `$CLONE_BASE/KNOWLEDGE_BASE.md`
+**KB Path:** `$CLONE_BASE/KNOWLEDGE_BASE.md` (index) + `$CLONE_BASE/PATTERNS.md` (detailed patterns)
 
 ### 6.0 Pattern Worth Gate (MANDATORY before KB write)
 
@@ -172,8 +202,9 @@ Before writing ANY new pattern to `## 可复用模式`, ALL 5 must pass:
 
 1. **Append minimal non-empty entries only** — no "None found", no "N/A", no placeholders
 2. **Maintain index table at top** — one row per project, don't duplicate into detailed entry
-3. **Consolidation pass** — trigger at >150 lines OR every 3 projects (merge shared patterns, remove empty headings, verify links)
+3. **Consolidation pass** — trigger at >100 lines KB OR every 3 projects (move patterns to PATTERNS.md)
 4. **Deep-Dive Navigation** — KB gets verdict/insight/tags/link; details stay in RESEARCH.md
+5. **Layered storage** — KB = index only (~50-80 lines); PATTERNS.md = detailed patterns (~500+ lines)
 
 **Per-project entry template:**
 ```markdown
@@ -188,15 +219,15 @@ Before writing ANY new pattern to `## 可复用模式`, ALL 5 must pass:
 
 ### 6.2 Knowledge Linking (Cross-Project Pattern Dedup)
 
-When a new project exhibits an **existing** KB pattern:
+When a new project exhibits an **existing** pattern in PATTERNS.md:
 
 | Situation | Action |
 |-----------|--------|
-| Exact match in KB | Add project name to existing pattern heading, no new bullets |
-| Same family, new variant | Add project name to heading + append variant sub-bullet |
-| Truly novel | Pass Pattern Worth Gate → add new entry with `(project)` in heading |
+| Exact match | Add project name to existing pattern's `来源` line, no new content |
+| Same family, new variant | Add project name + append variant sub-section |
+| Truly novel | Pass Pattern Worth Gate → add new entry to PATTERNS.md |
 
-**In per-project entries**, reference linked patterns: `Uses 客户端-守护进程 IPC 架构 (see 可复用模式)` — never re-describe.
+**In per-project entries**, reference linked patterns: `Uses 客户端-守护进程 IPC 架构 (see PATTERNS.md)` — never re-describe.
 
 > **Rule:** A pattern appears in KB exactly ONCE in `## 可复用模式`, with ALL source projects in its heading.
 
