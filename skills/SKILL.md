@@ -9,17 +9,18 @@ Auto-generated skill index for **github-project-researcher-oss**.
 
 ## Discovered Documentation
 
-- `.sisyphus/drafts/auto-video-generation-pipeline.md`
-- `.sisyphus/drafts/cli-runners-and-optimizations.md`
-- `.sisyphus/plans/auto-video-generation-pipeline.md`
-- `.sisyphus/plans/cli-runners-and-optimizations.md`
 - `AGENTS.md`
 - `README.md`
 - `README_ZH.md`
 - `SKILL.md`
 - `SKILL_FULL.md`
+- `.sisyphus/plans/auto-video-generation-pipeline.md`
+- `.sisyphus/plans/cli-runners-and-optimizations.md`
+- `.sisyphus/drafts/auto-video-generation-pipeline.md`
+- `.sisyphus/drafts/cli-runners-and-optimizations.md`
 - `agents/bash-style.md`
 - `agents/skill-dev.md`
+- `agents/workflow.md`
 - `agents/steps/01-fetch.md`
 - `agents/steps/02-clone.md`
 - `agents/steps/03-analysis.md`
@@ -33,6 +34,6 @@ Auto-generated skill index for **github-project-researcher-oss**.
 - `agents/steps/05-research.md`
 - `agents/steps/06-kb.md`
 - `agents/steps/07-competitors.md`
-- `agents/workflow.md`
+- `skills/SKILL.md`
 
-_Generated: 2026-02-26 19:43 UTC_
+_Generated: 2026-02-26 19:49 UTC_
