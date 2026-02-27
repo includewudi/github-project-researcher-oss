@@ -84,27 +84,27 @@ fi
 
 log_info()  { 
     echo -e "${BLUE}[INFO]${NC} $*"
-    [[ -n "$LOG_FILE" ]] && echo "[$(date '+%Y-%m-%d %H:%M:%S')] [INFO] $*" >> "$LOG_FILE"
+    [[ -n "$LOG_FILE" ]] && echo "[$(date '+%Y-%m-%d %H:%M:%S')] [INFO] $*" >> "$LOG_FILE" || true
 }
 log_ok()    { 
     echo -e "${GREEN}[OK]${NC} $*"
-    [[ -n "$LOG_FILE" ]] && echo "[$(date '+%Y-%m-%d %H:%M:%S')] [OK] $*" >> "$LOG_FILE"
+    [[ -n "$LOG_FILE" ]] && echo "[$(date '+%Y-%m-%d %H:%M:%S')] [OK] $*" >> "$LOG_FILE" || true
 }
 log_warn()  { 
     echo -e "${YELLOW}[WARN]${NC} $*"
-    [[ -n "$LOG_FILE" ]] && echo "[$(date '+%Y-%m-%d %H:%M:%S')] [WARN] $*" >> "$LOG_FILE"
+    [[ -n "$LOG_FILE" ]] && echo "[$(date '+%Y-%m-%d %H:%M:%S')] [WARN] $*" >> "$LOG_FILE" || true
 }
 log_error() { 
     echo -e "${RED}[ERROR]${NC} $*" >&2
-    [[ -n "$LOG_FILE" ]] && echo "[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] $*" >> "$LOG_FILE"
+    [[ -n "$LOG_FILE" ]] && echo "[$(date '+%Y-%m-%d %H:%M:%S')] [ERROR] $*" >> "$LOG_FILE" || true
 }
 log_step()  { 
     echo -e "${CYAN}${BOLD}[STEP]${NC} $*"
-    [[ -n "$LOG_FILE" ]] && echo "[$(date '+%Y-%m-%d %H:%M:%S')] [STEP] $*" >> "$LOG_FILE"
+    [[ -n "$LOG_FILE" ]] && echo "[$(date '+%Y-%m-%d %H:%M:%S')] [STEP] $*" >> "$LOG_FILE" || true
 }
 log_msg() {
     echo -e "${DIM}${MAGENTA}[MSG]${NC} $*"
-    [[ -n "$LOG_FILE" ]] && echo "$*" >> "$LOG_FILE"
+    [[ -n "$LOG_FILE" ]] && echo "$*" >> "$LOG_FILE" || true
 }
 
 usage() {
