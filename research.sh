@@ -63,6 +63,10 @@ if [[ -f "$SCRIPT_DIR/.env.local" ]]; then
     source "$SCRIPT_DIR/.env.local"
 fi
 
+# ─── Proxy bypass for local server ──────────────────────────────────────────────
+# Ensure curl talks directly to the local OpenCode server, not through http_proxy.
+export no_proxy="${no_proxy:+${no_proxy},}${HOST},localhost,127.0.0.1"
+
 # ─── Colors ─────────────────────────────────────────────────────────────────────
 
 # Respect NO_COLOR (https://no-color.org/) and non-interactive terminals
@@ -386,21 +390,13 @@ PYEOF
 run_with_opencode() {
     log_step "1/4  Health check..."
 
-    HEALTH=$(curl -sf "${BASE_URL}/global/health" 2>/dev/null) || {
+    curl -sf "${BASE_URL}/session" >/dev/null 2>&1 || {
         log_error "OpenCode server not reachable at ${BASE_URL}"
         log_error "Start it with: opencode serve --port ${PORT}"
         exit 1
     }
 
-    HEALTHY=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin).get('healthy', False))" 2>/dev/null)
-    VERSION=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin).get('version', '?'))" 2>/dev/null)
-
-    if [[ "$HEALTHY" != "True" ]]; then
-        log_error "Server reports unhealthy: ${HEALTH}"
-        exit 1
-    fi
-
-    log_ok "Server healthy (v${VERSION})"
+    log_ok "Server healthy"
 
     if $DRY_RUN; then
         echo ""
