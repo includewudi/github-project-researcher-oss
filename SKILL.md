@@ -28,6 +28,7 @@ User's request
   ├─ Security Audit (15 min)
   │    Steps: 1 → 2 → 3-security → 4 (Security Posture only)
   │    Template: templates/research-security.md
+  │    Optional: SlowMist enhanced review (Web3/agent/strict mode)
   │
   ├─ Architecture Discovery (20 min)
   │    Steps: 1 → 2 → 3-architecture → document
@@ -130,7 +131,7 @@ No fabricated metrics. No "approximately" without actual counts. Every score bac
 | `steps/03-type-gate.md` | After clone — route to code vs docs |
 | `steps/03-analysis.md` | Code project — structure, deps, quality |
 | `steps/03d-docs.md` | Docs project — IA, build, coverage |
-| `steps/03-security.md` | Security audit or code analysis |
+| `steps/03-security.md` | Security audit or code analysis; includes SlowMist escalation triggers |
 | `steps/03-architecture.md` | Complex project — patterns, hierarchy |
 | `steps/04-fitness.md` | Before evaluation — scoring checklists |
 | `steps/05-report.md` | Writing RESEARCH.md — template reference |

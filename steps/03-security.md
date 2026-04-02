@@ -147,3 +147,52 @@ Trust Tier: T1 Official→Moderate; T2 Security→Moderate; T3 High-star→High;
 | **Dependencies** | Known CVEs |
 | **Auth** | Weak authentication, missing CSRF |
 | **Crypto** | Weak algorithms, hardcoded keys |
+
+---
+
+## SlowMist Enhanced Security (Optional)
+
+When the built-in checks are insufficient, escalate to the **SlowMist Agent Security** framework for deeper review.
+
+### When to Escalate
+
+| Trigger | Reason |
+|---------|--------|
+| Web3 / blockchain / DeFi / smart contract project | On-chain risk, AML, private key handling |
+| Project contains agent/MCP/skill configs + 🔴 findings | Agent safety threats need specialized patterns |
+| User explicitly requests stricter security review | "严格安全检查", "security audit", "慢雾" |
+| Initial scan score ≤ 10/20 (HIGH or CRITICAL) | Built-in checks found serious issues, need deeper analysis |
+| Supply chain red flags (pipe-to-shell, obfuscation) | SlowMist has richer supply chain pattern library |
+
+### How to Invoke
+
+```
+# Check if installed
+skill("slowmist-agent-security")
+```
+
+**If installed** → Load the skill and route to the appropriate review:
+
+| Project Type | SlowMist Review Route | Template |
+|---|---|---|
+| GitHub repo (general) | `reviews/repository.md` | `templates/report-repo.md` |
+| Skill / MCP package | `reviews/skill-mcp.md` | `templates/report-skill.md` |
+| Web3 / on-chain | `reviews/onchain.md` | `templates/report-onchain.md` |
+| URL / document review | `reviews/url-document.md` | `templates/report-url.md` |
+| Product / service / API | `reviews/product-service.md` | `templates/report-product.md` |
+
+**If NOT installed** → Print:
+
+```
+⚠️ 更严格的安全检查需要 SlowMist Agent Security skill。
+   安装: git clone https://github.com/slowmist/slowmist-agent-security.git ~/.config/opencode/skills/slowmist-agent-security
+   详情: https://github.com/slowmist/slowmist-agent-security
+```
+
+### Integration with Scoring
+
+SlowMist 的评估结果不替换内置 /20 评分，而是作为补充：
+
+- SlowMist 报告附在 RESEARCH.md 的 `## SlowMist Security Review` section
+- 如果 SlowMist 评级为 ⛔ REJECT → 内置评分自动降至 ≤ 4 (CRITICAL)
+- 如果 SlowMist 评级为 🔴 HIGH → 内置评分上限为 10 (HIGH)
